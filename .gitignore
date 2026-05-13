@@ -1,0 +1,47 @@
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# Docker volumes
+n8n_data/
+postgres_data/
+
+# Node (in case any tooling lands here later)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# n8n runtime
+.n8n/
+*.workflow.backup.json
+
+# Logs
+*.log
+logs/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build & misc
+dist/
+build/
+.cache/
+.tmp/
+coverage/
