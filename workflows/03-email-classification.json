@@ -1,0 +1,158 @@
+{
+  "name": "03 — Email Classification",
+  "active": false,
+  "nodes": [
+    {
+      "id": "node-imap",
+      "name": "IMAP — Poll Inbox",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "parameters": {
+        "mailbox": "INBOX",
+        "downloadAttachments": false,
+        "format": "simple",
+        "options": {
+          "customEmailConfig": "UNSEEN",
+          "forceReconnect": 30,
+          "allowUnauthorizedCerts": false
+        },
+        "postProcessAction": "nothing"
+      },
+      "notes": "5-min polling cadence (set in workflow settings). DO NOT auto-mark-seen — done after success path completes."
+    },
+    {
+      "id": "node-clean",
+      "name": "Clean Body",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [420, 300],
+      "parameters": {
+        "functionCode": "const raw = $json.text || ($json.html || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\nconst body = raw.slice(0, 8000);\nreturn [{ json: { uid: $json.uid, messageId: $json.messageId, from: $json.from?.text || $json.from, subject: $json.subject, body_clean: body, body_truncated: raw.length > 8000 } }];"
+      }
+    },
+    {
+      "id": "node-anthropic",
+      "name": "Anthropic — Classify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300],
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{$env.ANTHROPIC_API_KEY}}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\"model\":\"claude-haiku-4-5\",\"max_tokens\":256,\"system\":[{\"type\":\"text\",\"text\":\"You categorize incoming email into one of: sales, support, recruiting, billing, other. Also extract urgency (low|medium|high) and confidence (0-1). Output JSON only: {category, urgency, confidence, summary}. The summary is one sentence describing what the sender wants. No prose, no markdown fence.\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"messages\":[{\"role\":\"user\",\"content\":\"Subject: \"+$json.subject+\"\\nFrom: \"+$json.from+\"\\n\\n\"+$json.body_clean}]}",
+        "options": { "timeout": 30000 }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "node-validate",
+      "name": "Validate Classification",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [860, 300],
+      "parameters": {
+        "functionCode": "const responseText = $json.content?.[0]?.text;\nlet output;\ntry { output = JSON.parse(responseText); } catch (e) { throw new Error('Non-JSON from Claude: ' + (responseText||'').slice(0,200)); }\nconst schema = {\n  category:   v => ['sales','support','recruiting','billing','other'].includes(v),\n  urgency:    v => ['low','medium','high'].includes(v),\n  confidence: v => typeof v === 'number' && v >= 0 && v <= 1,\n  summary:    v => typeof v === 'string' && v.length >= 5 && v.length <= 500,\n};\nfor (const [field, check] of Object.entries(schema)) {\n  if (!check(output[field])) throw new Error('schema mismatch: ' + field + ' = ' + JSON.stringify(output[field]));\n}\n// Confidence floor — route low-confidence to 'other' regardless of category\nif (output.confidence < 0.6) output.category = 'other';\nconst pricing = { 'claude-haiku-4-5':{i:1.0,o:5.0} };\nconst p = pricing[$json.model] || pricing['claude-haiku-4-5'];\nconst cost = ($json.usage.input_tokens*p.i + $json.usage.output_tokens*p.o) / 1_000_000;\nconst src = $node['Clean Body'].json;\nreturn [{ json: { parsed: output, usage: $json.usage, model: $json.model, cost_usd: cost, uid: src.uid, messageId: src.messageId, subject: src.subject, from: src.from } }];"
+      }
+    },
+    {
+      "id": "node-route",
+      "name": "Route by Category",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.1,
+      "position": [1080, 300],
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "options": { "version": 2 }, "conditions": [{ "leftValue": "={{$json.parsed.category}}", "rightValue": "sales", "operator": { "type": "string", "operation": "equals" } }] }, "outputKey": "sales" },
+            { "conditions": { "options": { "version": 2 }, "conditions": [{ "leftValue": "={{$json.parsed.category}}", "rightValue": "support", "operator": { "type": "string", "operation": "equals" } }] }, "outputKey": "support" },
+            { "conditions": { "options": { "version": 2 }, "conditions": [{ "leftValue": "={{$json.parsed.category}}", "rightValue": "recruiting", "operator": { "type": "string", "operation": "equals" } }] }, "outputKey": "recruiting" },
+            { "conditions": { "options": { "version": 2 }, "conditions": [{ "leftValue": "={{$json.parsed.category}}", "rightValue": "billing", "operator": { "type": "string", "operation": "equals" } }] }, "outputKey": "billing" }
+          ]
+        },
+        "options": { "fallbackOutput": "other" }
+      }
+    },
+    {
+      "id": "node-slack",
+      "name": "Slack — Route to Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300],
+      "parameters": {
+        "url": "={{$env.SLACK_WEBHOOK_URL}}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*[\"+$json.parsed.urgency.toUpperCase()+\"] \"+$json.subject+\"*\\nFrom: `\"+$json.from+\"`\\n\\n\"+$json.parsed.summary}},{\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"category: \"+$json.parsed.category+\" · confidence: \"+$json.parsed.confidence}]}]}"
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "node-mark-seen",
+      "name": "IMAP — Mark Seen",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [1520, 300],
+      "parameters": {
+        "operation": "markAsRead",
+        "mailbox": "INBOX",
+        "messageId": "={{$json.uid}}"
+      },
+      "notes": "Only runs after Slack POST succeeds. Failure leaves message UNSEEN for next poll."
+    },
+    {
+      "id": "node-log-llm",
+      "name": "Supabase — Insert llm_calls",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1520, 480],
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/llm_calls",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "content-type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\"workflow_id\":\"email-classification\",\"workflow_run_id\":\"\"+$execution.id,\"model\":$json.model,\"prompt_tokens\":$json.usage.input_tokens,\"output_tokens\":$json.usage.output_tokens,\"duration_ms\":Math.max(1,Date.now()-$execution.startedAt),\"cost_usd\":$json.cost_usd,\"input\":{\"messageId\":$json.messageId,\"subject\":$json.subject,\"from\":$json.from},\"output\":$json.parsed,\"status\":\"ok\"}"
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    }
+  ],
+  "connections": {
+    "IMAP — Poll Inbox":             { "main": [[{ "node": "Clean Body", "type": "main", "index": 0 }]] },
+    "Clean Body":                    { "main": [[{ "node": "Anthropic — Classify", "type": "main", "index": 0 }]] },
+    "Anthropic — Classify":          { "main": [[{ "node": "Validate Classification", "type": "main", "index": 0 }]] },
+    "Validate Classification":       { "main": [[{ "node": "Route by Category", "type": "main", "index": 0 }, { "node": "Supabase — Insert llm_calls", "type": "main", "index": 0 }]] },
+    "Route by Category":             { "main": [[{ "node": "Slack — Route to Channel", "type": "main", "index": 0 }], [{ "node": "Slack — Route to Channel", "type": "main", "index": 0 }], [{ "node": "Slack — Route to Channel", "type": "main", "index": 0 }], [{ "node": "Slack — Route to Channel", "type": "main", "index": 0 }], [{ "node": "Slack — Route to Channel", "type": "main", "index": 0 }]] },
+    "Slack — Route to Channel":      { "main": [[{ "node": "IMAP — Mark Seen", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "error-handler"
+  },
+  "tags": ["autostream", "email-classification"]
+}
