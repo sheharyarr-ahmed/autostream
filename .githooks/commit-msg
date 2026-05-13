@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# AutoStream commit-msg hook
+# Blocks commits containing AI attribution strings. Discipline rule 02.
+# Activate with: git config core.hooksPath .githooks
+
+set -euo pipefail
+
+msg_file="${1:?missing commit message file path}"
+msg_content=$(cat "$msg_file")
+
+# Case-insensitive patterns. The hook reads the full message body.
+forbidden_pattern='claude|claude\.ai|generated with|co-authored-by|ai-assisted|🤖'
+
+if echo "$msg_content" | grep -iEq "$forbidden_pattern"; then
+  echo "" >&2
+  echo "✗ commit blocked by .githooks/commit-msg" >&2
+  echo "" >&2
+  echo "Commit message contains a forbidden attribution token." >&2
+  echo "Forbidden (case-insensitive): claude, claude.ai, generated with," >&2
+  echo "co-authored-by, ai-assisted, 🤖" >&2
+  echo "" >&2
+  echo "Rationale: AutoStream is single-author by Sheharyar Ahmed." >&2
+  echo "See .claude/rules/02-git-discipline.md for full policy." >&2
+  echo "" >&2
+  exit 1
+fi
+
+exit 0
