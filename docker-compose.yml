@@ -40,8 +40,14 @@ services:
       N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
       WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
 
+      TIMEZONE: ${TIMEZONE:-Asia/Karachi}
       GENERIC_TIMEZONE: ${TIMEZONE:-Asia/Karachi}
       TZ: ${TIMEZONE:-Asia/Karachi}
+
+      # Allow workflow expressions to read $env.* — both flags set explicitly
+      # so a future n8n default-flip doesn't silently break workflows.
+      N8N_ENV_ACCESS_TO_WORKFLOW: "true"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
 
       # Credentials available to expression engine via $env
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
