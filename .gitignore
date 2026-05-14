@@ -6,6 +6,11 @@
 *.key
 secrets/
 
+# Claude Code per-developer state (project settings.json is tracked; .local is not)
+.claude/settings.local.json
+.claude/.session/
+.claude/.cache/
+
 # Docker volumes
 n8n_data/
 postgres_data/
