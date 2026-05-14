@@ -56,6 +56,12 @@ services:
       RSS_FEEDS: ${RSS_FEEDS}
     volumes:
       - n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:5678/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   postgres_data:
