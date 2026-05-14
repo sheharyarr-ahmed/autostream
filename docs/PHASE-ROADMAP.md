@@ -88,3 +88,50 @@ AutoStream's evolution from portfolio demo (Phase 1) to multi-tenant SaaS (Phase
 - Phase 3: `v1.0.x` (multi-tenant)
 
 Phase 1 → 2 transition is the bigger jump in code volume. Phase 2 → 3 is the bigger jump in product scope.
+
+---
+
+## Phase 2: Workflow JSON validation (deferred from Phase 1, May 15 2026)
+
+### Why deferred
+End-to-end smoke testing of Phase 0-scaffolded workflow JSONs surfaced 6 schema/architectural issues that require careful resolution rather than rapid iteration. Decision made at 3:30 AM Pakistan time to lock in stable infrastructure commits and defer workflow validation to fresh-eyes session.
+
+### Issues identified (require resolution before workflows execute)
+1. Workflow 1 (Lead Qualification):
+   - Function node Verify HMAC requires NODE_FUNCTION_ALLOW_BUILTIN=crypto env var
+   - Function vs Code node decision: Function v1 supports $headers/$json magic, Code v2 doesn't
+   - HMAC accessor pattern needs alignment with chosen node type
+2. All workflows:
+   - HTTP Request nodes need specifyBody: 'json' parameter
+   - errorWorkflow references point to non-existent error handler
+   - Webhook nodes need stable webhookId UUIDs
+3. Workflow 2 (Daily Content Brief):
+   - Split-In-Batches node wiring malformed
+4. Workflow 3 (Email Classification):
+   - customEmailConfig parameter handling
+
+### Architectural decisions needed
+- Function node (n8n-nodes-base.function v1) vs Code node (n8n-nodes-base.code v2) — both have trade-offs
+- HMAC verification location: inside n8n workflow vs reverse-proxy layer
+- Whether to add NODE_FUNCTION_ALLOW_BUILTIN=crypto permanently (security implication)
+
+### Stable foundation (already shipped)
+- Healthcheck diagnostic and IPv4 loopback fix (commit 8017eab)
+- Env var forwarding to n8n container (commit 53ecdae)
+- Supabase observability schema with RLS (Gate 2 verified)
+- All cloud services provisioned (Anthropic, Supabase, Slack, Gmail IMAP)
+- All credentials configured (.env complete, backed up to Apple Notes)
+
+### Next session checklist
+1. Read this note first
+2. Run docker compose ps to verify containers still healthy
+3. Decide: revert to Function node + crypto env var, OR adapt to Code node + new accessor pattern
+4. Apply chosen pattern uniformly across all 3 workflows
+5. End-to-end smoke test with fresh eyes
+6. Push the workflow fixes as a separate clean commit cluster
+
+### What NOT to do next session
+- Don't ship partially-working workflows; smoke tests must pass cleanly
+- Don't defer the architectural decision further; pick Function OR Code, then commit to that path
+- Don't expand scope to Railway deploy until all 3 workflows verified
+- Don't post to LinkedIn until smoke tests are green
