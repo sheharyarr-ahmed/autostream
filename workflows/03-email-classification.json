@@ -67,7 +67,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"model\":\"claude-haiku-4-5\",\"max_tokens\":256,\"system\":[{\"type\":\"text\",\"text\":\"You categorize incoming email into one of: sales, support, recruiting, billing, other. Also extract urgency (low|medium|high) and confidence (0-1). Output JSON only: {category, urgency, confidence, summary}. The summary is one sentence describing what the sender wants. No prose, no markdown fence.\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"messages\":[{\"role\":\"user\",\"content\":\"Subject: \"+$json.subject+\"\\nFrom: \"+$json.from+\"\\n\\n\"+$json.body_clean}]}",
+        "jsonBody": "={\"model\":\"claude-haiku-4-5\",\"max_tokens\":256,\"system\":[{\"type\":\"text\",\"text\":\"You categorize incoming email into one of: sales, support, recruiting, billing, other. Also extract urgency (low|medium|high) and confidence (0-1). Output JSON only: {category, urgency, confidence, summary}. The summary is one sentence describing what the sender wants. No prose, no markdown fence.\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"messages\":[{\"role\":\"user\",\"content\":{{JSON.stringify(\"Subject: \" + $json.subject + \"\\nFrom: \" + $json.from + \"\\n\\n\" + $json.body_clean)}}}]}",
         "options": {
           "timeout": 30000
         },
@@ -195,7 +195,7 @@
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*[\"+$json.parsed.urgency.toUpperCase()+\"] \"+$json.subject+\"*\\nFrom: `\"+$json.from+\"`\\n\\n\"+$json.parsed.summary}},{\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"category: \"+$json.parsed.category+\" \u00b7 confidence: \"+$json.parsed.confidence}]}]}",
+        "jsonBody": "={\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*[{{$json.parsed.urgency.toUpperCase()}}] {{$json.subject}}*\\nFrom: `{{$json.from}}`\\n\\n{{$json.parsed.summary}}\"}},{\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"category: {{$json.parsed.category}} \u00b7 confidence: {{$json.parsed.confidence}}\"}]}]}",
         "specifyBody": "json"
       },
       "retryOnFail": true,
@@ -253,7 +253,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"workflow_id\":\"email-classification\",\"workflow_run_id\":\"\"+$execution.id,\"model\":$json.model,\"prompt_tokens\":$json.usage.input_tokens,\"output_tokens\":$json.usage.output_tokens,\"duration_ms\":Math.max(1,Date.now()-$execution.startedAt),\"cost_usd\":$json.cost_usd,\"input\":{\"messageId\":$json.messageId,\"subject\":$json.subject,\"from\":$json.from},\"output\":$json.parsed,\"status\":\"ok\"}",
+        "jsonBody": "={\"workflow_id\":\"email-classification\",\"workflow_run_id\":\"{{$execution.id}}\",\"model\":\"{{$json.model}}\",\"prompt_tokens\":{{$json.usage.input_tokens}},\"output_tokens\":{{$json.usage.output_tokens}},\"duration_ms\":{{Math.max(1,Date.now()-new Date($execution.startedAt).getTime())}},\"cost_usd\":{{$json.cost_usd}},\"input\":{{JSON.stringify({\"messageId\":$json.messageId,\"subject\":$json.subject,\"from\":$json.from})}},\"output\":{{JSON.stringify($json.parsed)}},\"status\":\"ok\"}",
         "specifyBody": "json"
       },
       "retryOnFail": true,

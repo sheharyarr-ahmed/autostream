@@ -125,7 +125,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"model\":\"claude-opus-4-7\",\"max_tokens\":2048,\"system\":[{\"type\":\"text\",\"text\":\"You are a critic selecting the 3 most consequential items from a list of recent articles. Output JSON only: {items:[{title,url,source,why_it_matters}],synthesis:'150-200 word paragraph tying them together'}. Reject items that don't earn their slot \u2014 better to return 2 strong items than 3 mediocre ones.\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"messages\":[{\"role\":\"user\",\"content\":\"Today's candidates:\\n\"+JSON.stringify($input.all().map(i=>i.json))}]}",
+        "jsonBody": "={\"model\":\"claude-opus-4-7\",\"max_tokens\":2048,\"system\":[{\"type\":\"text\",\"text\":\"You are a critic selecting the 3 most consequential items from a list of recent articles. Output JSON only: {items:[{title,url,source,why_it_matters}],synthesis:'150-200 word paragraph tying them together'}. Reject items that don't earn their slot \u2014 better to return 2 strong items than 3 mediocre ones.\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"messages\":[{\"role\":\"user\",\"content\":{{JSON.stringify(\"Today's candidates:\\n\" + JSON.stringify($input.all().map(i=>i.json)))}}}]}",
         "options": {
           "timeout": 60000
         },
@@ -163,7 +163,7 @@
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"blocks\":[{\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"\ud83d\udcf0 Daily brief\"}},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":$json.parsed.synthesis}},{\"type\":\"divider\"},...$json.parsed.items.map(it => ({\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*<\"+it.url+\"|\"+it.title+\">* \u00b7 \"+it.source+\"\\n\"+it.why_it_matters}}))]}",
+        "jsonBody": "={\"blocks\":{{JSON.stringify([{\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"\ud83d\udcf0 Daily brief\"}},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":$json.parsed.synthesis}},{\"type\":\"divider\"}].concat($json.parsed.items.map(it => ({\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*<\"+it.url+\"|\"+it.title+\">* \u00b7 \"+it.source+\"\\n\"+it.why_it_matters}}))))}}}",
         "specifyBody": "json"
       },
       "retryOnFail": true,
@@ -205,7 +205,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"workflow_id\":\"daily-content-brief\",\"workflow_run_id\":\"\"+$execution.id,\"model\":$json.model,\"prompt_tokens\":$json.usage.input_tokens,\"output_tokens\":$json.usage.output_tokens,\"duration_ms\":Math.max(1,Date.now()-$execution.startedAt),\"cost_usd\":$json.cost_usd,\"input\":{\"feed_count\":($env.RSS_FEEDS||'').split(',').length},\"output\":$json.parsed,\"status\":\"ok\"}",
+        "jsonBody": "={\"workflow_id\":\"daily-content-brief\",\"workflow_run_id\":\"{{$execution.id}}\",\"model\":\"{{$json.model}}\",\"prompt_tokens\":{{$json.usage.input_tokens}},\"output_tokens\":{{$json.usage.output_tokens}},\"duration_ms\":{{Math.max(1,Date.now()-new Date($execution.startedAt).getTime())}},\"cost_usd\":{{$json.cost_usd}},\"input\":{{JSON.stringify({\"feed_count\":($env.RSS_FEEDS||\"\").split(\",\").length})}},\"output\":{{JSON.stringify($json.parsed)}},\"status\":\"ok\"}",
         "specifyBody": "json"
       },
       "retryOnFail": true,
@@ -247,7 +247,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={{ $json.parsed.items.map(it => ({ guid: it.url, title: it.title, link: it.url, source: it.source, selected: true })) }}",
+        "jsonBody": "={{JSON.stringify($json.parsed.items.map(it => ({guid:it.url,title:it.title,link:it.url,source:it.source,selected:true})))}}",
         "specifyBody": "json"
       }
     }

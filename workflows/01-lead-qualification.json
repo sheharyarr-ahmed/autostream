@@ -134,7 +134,7 @@
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"blocks\":[{\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"\ud83c\udfaf Qualified lead \u2014 score \"+$json.parsed.score}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Intent*\\n\"+$json.parsed.intent},{\"type\":\"mrkdwn\",\"text\":\"*Fit*\\n\"+$json.parsed.fit},{\"type\":\"mrkdwn\",\"text\":\"*Urgency*\\n\"+$json.parsed.urgency}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*Rationale*\\n\"+$json.parsed.rationale}},{\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"workflow_run_id: `\"+$execution.id+\"`\"}]}]}",
+        "jsonBody": "={\"blocks\":[{\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"\ud83c\udfaf Qualified lead \u2014 score {{$json.parsed.score}}\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Intent*\\n{{$json.parsed.intent}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Fit*\\n{{$json.parsed.fit}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Urgency*\\n{{$json.parsed.urgency}}\"}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*Rationale*\\n{{$json.parsed.rationale}}\"}},{\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"workflow_run_id: `{{$execution.id}}`\"}]}]}",
         "specifyBody": "json"
       },
       "retryOnFail": true,
@@ -176,7 +176,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"workflow_id\":\"lead-qualification\",\"workflow_run_id\":\"\"+$execution.id,\"model\":$json.model,\"prompt_tokens\":$json.usage.input_tokens,\"output_tokens\":$json.usage.output_tokens,\"duration_ms\":Math.max(1,Date.now()-$execution.startedAt),\"cost_usd\":$json.cost_usd,\"input\":$json.original,\"output\":$json.parsed,\"status\":\"ok\"}",
+        "jsonBody": "={\"workflow_id\":\"lead-qualification\",\"workflow_run_id\":\"{{$execution.id}}\",\"model\":\"{{$json.model}}\",\"prompt_tokens\":{{$json.usage.input_tokens}},\"output_tokens\":{{$json.usage.output_tokens}},\"duration_ms\":{{Math.max(1,Date.now()-new Date($execution.startedAt).getTime())}},\"cost_usd\":{{$json.cost_usd}},\"input\":{{JSON.stringify($json.original)}},\"output\":{{JSON.stringify($json.parsed)}},\"status\":\"ok\"}",
         "specifyBody": "json"
       },
       "retryOnFail": true,
@@ -218,7 +218,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"id\":\"\"+$execution.id,\"workflow_id\":\"lead-qualification\",\"status\":\"ok\",\"duration_ms\":Math.max(1,Date.now()-$execution.startedAt),\"started_at\":new Date($execution.startedAt).toISOString(),\"ended_at\":new Date().toISOString(),\"meta\":{}}",
+        "jsonBody": "={\"id\":\"{{$execution.id}}\",\"workflow_id\":\"lead-qualification\",\"status\":\"ok\",\"duration_ms\":{{Math.max(1,Date.now()-new Date($execution.startedAt).getTime())}},\"started_at\":\"{{new Date($execution.startedAt).toISOString()}}\",\"ended_at\":\"{{new Date().toISOString()}}\",\"meta\":{}}",
         "specifyBody": "json"
       }
     }

@@ -232,3 +232,51 @@ Total: ~$0.002 of $0.50 budget. Anthropic was actually called successfully in at
 - Don't ship until full chain (HMAC → Anthropic → Validate → Slack + Supabase write) is verified end-to-end with a row visible in `llm_calls`.
 - Don't expand scope to Railway deploy until Phase 2.1 closes.
 - Don't post the Loom demo until Phase 2.1 closes.
+
+### May 16 2026 follow-up session — Edits 5 & 6 shipped, Supabase still blocked
+
+Two more authorized edits (Edits 5 + 6) were applied this session. **End-to-end chain advanced significantly** but did not reach commit-eligible state.
+
+**Edit 5 — Slack/Supabase jsonBody hybrid → `{{ }}` interpolation:**
+Applied to 8 nodes uniformly (3 in wf1, 3 in wf2, 2 in wf3). Pattern converted from broken `"prefix "+$json.X` to working `"prefix {{$json.X}}"`. Source-cited via `HttpRequestV3.node.ts` lines 337–355 (specifyBody==='json' branch calls `JSON.parse(jsonBodyParameter)`, requires a JSON-parseable result string).
+
+**Result of Edit 5:** Slack — Qualified Lead node **successfully posted** an alert in execution 12 (independent Slack channel verification available). First end-to-end Slack alert ever from this codebase.
+
+**Edit 6 — duration_ms NaN bug + 2 missed Anthropic hybrid-syntax nodes:**
+`$execution.startedAt` is an ISO string, not a number. `Date.now() - $execution.startedAt` coerced to NaN, producing invalid JSON. Fixed via `new Date($execution.startedAt).getTime()` in 4 Supabase nodes. Also fixed wf2 Anthropic Critic Brief and wf3 Anthropic Classify nodes that were missed by Edit 5's scope.
+
+**Result of Edit 6:** Smoke 3a still fails at Supabase Insert llm_calls with `JSON parameter needs to be valid JSON`. The duration_ms fix is verified in the deployed body, all `$json.*` and `$execution.*` references resolve to valid data (verified via executions API inspection), but the resolved body still fails `JSON.parse`. Root cause **not pinpointed** — n8n's HTTP node doesn't log the offending body string, only the error message. Diagnosing further would require an Edit 7 (e.g., a debug node to dump the resolved body), which is forbidden by this session's discipline cap.
+
+### Updated bug catalog (Phase 0 → Phase 2 → Phase 2.1)
+
+| # | Bug | Status |
+|---|---|---|
+| 1 | Webhook missing `webhookId` | ✓ fixed (May 15) |
+| 2 | HTTP nodes missing `specifyBody: 'json'` | ✓ fixed (May 15) |
+| 3 | `errorWorkflow` references nonexistent workflow | ✓ fixed (May 15) |
+| 4 | wf2 Split-In-Batches `done` output orphaned | ✓ fixed (May 15) |
+| 5 | wf3 `customEmailConfig` not valid JSON | ✓ fixed (May 15) |
+| 6 | wf1 Anthropic content as object not string | ✓ fixed (May 15) |
+| 7 | Validate nodes don't strip Claude's markdown fence | ✓ fixed (May 15) |
+| 8 | Slack/Supabase jsonBody hybrid syntax (8 nodes) | ✓ fixed (May 16, Edit 5) |
+| 9 | duration_ms NaN from ISO-string arithmetic (4 nodes) | ✓ fixed (May 16, Edit 6) |
+| 10 | wf2 + wf3 Anthropic content hybrid syntax | ✓ fixed (May 16, Edit 6 expansion) |
+| **11** | **Supabase Insert llm_calls body still invalid JSON after Edits 5+6** — root cause unknown without debug instrumentation | **OPEN — Phase 2.1 target** |
+
+### Phase 2.1 narrower runbook (revised, May 16)
+
+Given the Supabase body bug 11 is opaque without a debug node, and given hand-authoring has now produced 11 bugs in a row, **the UI-export path is mandatory for Phase 2.1**:
+
+1. `docker compose ps` — confirm containers healthy. Latest workflow ids in n8n: `/tmp/wf-ids.json` (will be stale after restart).
+2. Open n8n UI at http://localhost:5678. Workflows are imported with all Edits 1–6 applied to the JSON, but **wf1 still fails smoke test at Supabase Insert llm_calls**.
+3. Open `01 — Lead Qualification` in the editor. The whole workflow is visible.
+4. **For each broken HTTP node** (Supabase llm_calls + Supabase workflow_runs, all 3 workflows): delete the node and recreate it via the UI's HTTP Request node. Use the body editor's "Specify Body using Fields Below" mode rather than "JSON" mode — this generates `bodyParameters` (key-value) format which is more forgiving than hand-authored jsonBody templates.
+5. Map each field individually. Reference upstream data via the UI's expression assistant rather than typing `{{...}}` markers.
+6. Save in UI. Export workflow JSON via Workflow → Download.
+7. Replace `workflows/0X-*.json` with UI export.
+8. Diff: only the rebuilt HTTP nodes should differ. Accept structural reformatting from the UI.
+9. Re-import via API. Smoke 3a.
+10. Repeat for wf2 and wf3.
+11. Commit + push only after 3a passes end-to-end with a visible `llm_calls` row.
+
+**Time spent on Phase 2 hand-authored fixes:** roughly 5 sessions. Time required to rebuild affected nodes in n8n UI: estimated 30–45 minutes. The leverage ratio is clear.
