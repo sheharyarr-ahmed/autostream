@@ -49,6 +49,10 @@ services:
       N8N_ENV_ACCESS_TO_WORKFLOW: "true"
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
 
+      # Allow Function/Code nodes to require('crypto') — needed for HMAC
+      # verification in workflow 1. vm2 sandbox blocks all built-ins by default.
+      NODE_FUNCTION_ALLOW_BUILTIN: "crypto"
+
       # Credentials available to expression engine via $env
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       SUPABASE_URL: ${SUPABASE_URL}
