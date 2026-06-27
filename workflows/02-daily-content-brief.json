@@ -1,6 +1,6 @@
 {
-  "name": "02 \u2014 Daily Content Brief",
-  "active": false,
+  "name": "02 — Daily Content Brief",
+  "active": true,
   "nodes": [
     {
       "id": "node-cron",
@@ -33,9 +33,9 @@
         300
       ],
       "parameters": {
-        "jsCode": "const feeds = ($env.RSS_FEEDS || '').split(',').map(s => s.trim()).filter(Boolean);\nreturn feeds.map(url => ({ json: { feed_url: url } }));"
+        "jsCode": "const feeds = ($env.RSS_FEEDS || '').split(',').map(s => s.trim()).filter(Boolean);\nconst _ts = Date.now();\nreturn feeds.map(url => ({ json: { feed_url: url, _ts_start: _ts } }));"
       },
-      "notes": "Comma-separated env \u2192 one item per feed URL."
+      "notes": "Comma-separated env → one item per feed URL."
     },
     {
       "id": "node-batch",
@@ -96,7 +96,7 @@
     },
     {
       "id": "node-anthropic",
-      "name": "Anthropic \u2014 Critic Brief",
+      "name": "Anthropic — Critic Brief",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -125,7 +125,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"model\":\"claude-opus-4-7\",\"max_tokens\":2048,\"system\":[{\"type\":\"text\",\"text\":\"You are a critic selecting the 3 most consequential items from a list of recent articles. Output JSON only: {items:[{title,url,source,why_it_matters}],synthesis:'150-200 word paragraph tying them together'}. Reject items that don't earn their slot \u2014 better to return 2 strong items than 3 mediocre ones.\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"messages\":[{\"role\":\"user\",\"content\":{{JSON.stringify(\"Today's candidates:\\n\" + JSON.stringify($input.all().map(i=>i.json)))}}}]}",
+        "jsonBody": "={{ JSON.stringify({ model: \"claude-opus-4-7\", max_tokens: 2048, system: [{ type: \"text\", text: \"You are a critic selecting the 3 most consequential items from a list of recent articles. Output JSON only: {items:[{title,url,source,why_it_matters}],synthesis:'150-200 word paragraph tying them together'}. Reject items that don't earn their slot - better to return 2 strong items than 3 mediocre ones.\", cache_control: { type: \"ephemeral\" } }], messages: [{ role: \"user\", content: \"Today's candidates:\\n\" + JSON.stringify($input.all().map(i => i.json)) }] }) }}",
         "options": {
           "timeout": 60000
         },
@@ -134,7 +134,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 2000,
-      "notes": "Opus 4.7 \u2014 synthesis quality compounds (ADR 0006)."
+      "notes": "Opus 4.7 — synthesis quality compounds (ADR 0006)."
     },
     {
       "id": "node-validate",
@@ -151,7 +151,7 @@
     },
     {
       "id": "node-slack",
-      "name": "Slack \u2014 Brief",
+      "name": "Slack — Brief",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -163,7 +163,7 @@
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"blocks\":{{JSON.stringify([{\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"\ud83d\udcf0 Daily brief\"}},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":$json.parsed.synthesis}},{\"type\":\"divider\"}].concat($json.parsed.items.map(it => ({\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*<\"+it.url+\"|\"+it.title+\">* \u00b7 \"+it.source+\"\\n\"+it.why_it_matters}}))))}}}",
+        "jsonBody": "={{ JSON.stringify({ blocks: [{ type: \"header\", text: { type: \"plain_text\", text: \"📰 Daily brief\" } }, { type: \"section\", text: { type: \"mrkdwn\", text: $json.parsed.synthesis } }, { type: \"divider\" }].concat($json.parsed.items.map(it => ({ type: \"section\", text: { type: \"mrkdwn\", text: \"*<\" + it.url + \"|\" + it.title + \">* · \" + it.source + \"\\n\" + it.why_it_matters } }))) }) }}",
         "specifyBody": "json"
       },
       "retryOnFail": true,
@@ -172,7 +172,7 @@
     },
     {
       "id": "node-log-llm",
-      "name": "Supabase \u2014 Insert llm_calls",
+      "name": "Supabase — Insert llm_calls",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -205,7 +205,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"workflow_id\":\"daily-content-brief\",\"workflow_run_id\":\"{{$execution.id}}\",\"model\":\"{{$json.model}}\",\"prompt_tokens\":{{$json.usage.input_tokens}},\"output_tokens\":{{$json.usage.output_tokens}},\"duration_ms\":{{Math.max(1,Date.now()-new Date($execution.startedAt).getTime())}},\"cost_usd\":{{$json.cost_usd}},\"input\":{{JSON.stringify({\"feed_count\":($env.RSS_FEEDS||\"\").split(\",\").length})}},\"output\":{{JSON.stringify($json.parsed)}},\"status\":\"ok\"}",
+        "jsonBody": "={{ JSON.stringify({ workflow_id: \"daily-content-brief\", workflow_run_id: $execution.id, model: $json.model, prompt_tokens: $json.usage.input_tokens, output_tokens: $json.usage.output_tokens, duration_ms: Date.now() - $('Split RSS_FEEDS').first().json._ts_start, cost_usd: $json.cost_usd, input: { feed_count: ($env.RSS_FEEDS || \"\").split(\",\").length }, output: $json.parsed, status: \"ok\" }) }}",
         "specifyBody": "json"
       },
       "retryOnFail": true,
@@ -214,7 +214,7 @@
     },
     {
       "id": "node-archive",
-      "name": "Supabase \u2014 Archive Briefs",
+      "name": "Supabase — Archive Briefs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -247,7 +247,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={{JSON.stringify($json.parsed.items.map(it => ({guid:it.url,title:it.title,link:it.url,source:it.source,selected:true})))}}",
+        "jsonBody": "={{ JSON.stringify($('Validate Brief').first().json.parsed.items.map(it => ({ guid: it.url, title: it.title, link: it.url, source: it.source, selected: true }))) }}",
         "specifyBody": "json"
       }
     }
@@ -279,14 +279,14 @@
       "main": [
         [
           {
-            "node": "RSS Feed Read",
+            "node": "Aggregate Items",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Aggregate Items",
+            "node": "RSS Feed Read",
             "type": "main",
             "index": 0
           }
@@ -319,14 +319,14 @@
       "main": [
         [
           {
-            "node": "Anthropic \u2014 Critic Brief",
+            "node": "Anthropic — Critic Brief",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Anthropic \u2014 Critic Brief": {
+    "Anthropic — Critic Brief": {
       "main": [
         [
           {
@@ -341,23 +341,23 @@
       "main": [
         [
           {
-            "node": "Slack \u2014 Brief",
+            "node": "Slack — Brief",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Supabase \u2014 Insert llm_calls",
+            "node": "Supabase — Insert llm_calls",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Supabase \u2014 Insert llm_calls": {
+    "Supabase — Insert llm_calls": {
       "main": [
         [
           {
-            "node": "Supabase \u2014 Archive Briefs",
+            "node": "Supabase — Archive Briefs",
             "type": "main",
             "index": 0
           }
