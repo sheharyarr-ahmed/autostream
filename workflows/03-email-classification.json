@@ -1,10 +1,10 @@
 {
-  "name": "03 \u2014 Email Classification",
+  "name": "03 — Email Classification",
   "active": false,
   "nodes": [
     {
       "id": "node-imap",
-      "name": "IMAP \u2014 Poll Inbox",
+      "name": "IMAP — Poll Inbox",
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2,
       "position": [
@@ -19,9 +19,9 @@
           "forceReconnect": 30,
           "allowUnauthorizedCerts": false
         },
-        "postProcessAction": "nothing"
+        "postProcessAction": "read"
       },
-      "notes": "5-min polling cadence (set in workflow settings). DO NOT auto-mark-seen \u2014 done after success path completes."
+      "notes": "5-min polling cadence (set in workflow settings). DO NOT auto-mark-seen — done after success path completes."
     },
     {
       "id": "node-clean",
@@ -33,12 +33,12 @@
         300
       ],
       "parameters": {
-        "functionCode": "const raw = $json.text || ($json.html || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\nconst body = raw.slice(0, 8000);\nreturn [{ json: { uid: $json.uid, messageId: $json.messageId, from: $json.from?.text || $json.from, subject: $json.subject, body_clean: body, body_truncated: raw.length > 8000 } }];"
+        "functionCode": "const raw = $json.text || ($json.html || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\nconst body = raw.slice(0, 8000);\nreturn [{ json: { uid: $json.uid, messageId: $json.messageId, from: $json.from?.text || $json.from, subject: $json.subject, body_clean: body, body_truncated: raw.length > 8000, _ts_start: Date.now() } }];"
       }
     },
     {
       "id": "node-anthropic",
-      "name": "Anthropic \u2014 Classify",
+      "name": "Anthropic — Classify",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -67,7 +67,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"model\":\"claude-haiku-4-5\",\"max_tokens\":256,\"system\":[{\"type\":\"text\",\"text\":\"You categorize incoming email into one of: sales, support, recruiting, billing, other. Also extract urgency (low|medium|high) and confidence (0-1). Output JSON only: {category, urgency, confidence, summary}. The summary is one sentence describing what the sender wants. No prose, no markdown fence.\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"messages\":[{\"role\":\"user\",\"content\":{{JSON.stringify(\"Subject: \" + $json.subject + \"\\nFrom: \" + $json.from + \"\\n\\n\" + $json.body_clean)}}}]}",
+        "jsonBody": "={{ JSON.stringify({ model: \"claude-haiku-4-5\", max_tokens: 256, system: [{ type: \"text\", text: \"You categorize incoming email into one of: sales, support, recruiting, billing, other. Also extract urgency (low|medium|high) and confidence (0-1). Output JSON only: {category, urgency, confidence, summary}. The summary is one sentence describing what the sender wants. No prose, no markdown fence.\", cache_control: { type: \"ephemeral\" } }], messages: [{ role: \"user\", content: \"Subject: \" + $json.subject + \"\\nFrom: \" + $json.from + \"\\n\\n\" + $json.body_clean }] }) }}",
         "options": {
           "timeout": 30000
         },
@@ -87,7 +87,7 @@
         300
       ],
       "parameters": {
-        "functionCode": "const responseText = $json.content?.[0]?.text;\nconst cleaned = (responseText || '').replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\nlet output;\ntry { output = JSON.parse(cleaned); } catch (e) { throw new Error('Non-JSON from Claude: ' + (responseText||'').slice(0,200)); }\nconst schema = {\n  category:   v => ['sales','support','recruiting','billing','other'].includes(v),\n  urgency:    v => ['low','medium','high'].includes(v),\n  confidence: v => typeof v === 'number' && v >= 0 && v <= 1,\n  summary:    v => typeof v === 'string' && v.length >= 5 && v.length <= 500,\n};\nfor (const [field, check] of Object.entries(schema)) {\n  if (!check(output[field])) throw new Error('schema mismatch: ' + field + ' = ' + JSON.stringify(output[field]));\n}\n// Confidence floor \u2014 route low-confidence to 'other' regardless of category\nif (output.confidence < 0.6) output.category = 'other';\nconst pricing = { 'claude-haiku-4-5':{i:1.0,o:5.0} };\nconst p = pricing[$json.model] || pricing['claude-haiku-4-5'];\nconst cost = ($json.usage.input_tokens*p.i + $json.usage.output_tokens*p.o) / 1_000_000;\nconst src = $node['Clean Body'].json;\nreturn [{ json: { parsed: output, usage: $json.usage, model: $json.model, cost_usd: cost, uid: src.uid, messageId: src.messageId, subject: src.subject, from: src.from } }];"
+        "functionCode": "const responseText = $json.content?.[0]?.text;\nconst cleaned = (responseText || '').replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\nlet output;\ntry { output = JSON.parse(cleaned); } catch (e) { throw new Error('Non-JSON from Claude: ' + (responseText||'').slice(0,200)); }\nconst schema = {\n  category:   v => ['sales','support','recruiting','billing','other'].includes(v),\n  urgency:    v => ['low','medium','high'].includes(v),\n  confidence: v => typeof v === 'number' && v >= 0 && v <= 1,\n  summary:    v => typeof v === 'string' && v.length >= 5 && v.length <= 500,\n};\nfor (const [field, check] of Object.entries(schema)) {\n  if (!check(output[field])) throw new Error('schema mismatch: ' + field + ' = ' + JSON.stringify(output[field]));\n}\n// Confidence floor — route low-confidence to 'other' regardless of category\nif (output.confidence < 0.6) output.category = 'other';\nconst pricing = { 'claude-haiku-4-5':{i:1.0,o:5.0} };\nconst p = pricing[$json.model] || pricing['claude-haiku-4-5'];\nconst cost = ($json.usage.input_tokens*p.i + $json.usage.output_tokens*p.o) / 1_000_000;\nconst src = $node['Clean Body'].json;\nreturn [{ json: { parsed: output, usage: $json.usage, model: $json.model, cost_usd: cost, uid: src.uid, messageId: src.messageId, subject: src.subject, from: src.from } }];"
       }
     },
     {
@@ -183,7 +183,7 @@
     },
     {
       "id": "node-slack",
-      "name": "Slack \u2014 Route to Channel",
+      "name": "Slack — Route to Channel",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -195,7 +195,7 @@
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*[{{$json.parsed.urgency.toUpperCase()}}] {{$json.subject}}*\\nFrom: `{{$json.from}}`\\n\\n{{$json.parsed.summary}}\"}},{\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"category: {{$json.parsed.category}} \u00b7 confidence: {{$json.parsed.confidence}}\"}]}]}",
+        "jsonBody": "={{ JSON.stringify({ blocks: [{ type: \"section\", text: { type: \"mrkdwn\", text: \"*[\" + $json.parsed.urgency.toUpperCase() + \"] \" + $json.subject + \"*\\nFrom: `\" + $json.from + \"`\\n\\n\" + $json.parsed.summary } }, { type: \"context\", elements: [{ type: \"mrkdwn\", text: \"category: \" + $json.parsed.category + \" · confidence: \" + $json.parsed.confidence }] }] }) }}",
         "specifyBody": "json"
       },
       "retryOnFail": true,
@@ -203,24 +203,8 @@
       "waitBetweenTries": 1000
     },
     {
-      "id": "node-mark-seen",
-      "name": "IMAP \u2014 Mark Seen",
-      "type": "n8n-nodes-base.emailReadImap",
-      "typeVersion": 2,
-      "position": [
-        1520,
-        300
-      ],
-      "parameters": {
-        "operation": "markAsRead",
-        "mailbox": "INBOX",
-        "messageId": "={{$json.uid}}"
-      },
-      "notes": "Only runs after Slack POST succeeds. Failure leaves message UNSEEN for next poll."
-    },
-    {
       "id": "node-log-llm",
-      "name": "Supabase \u2014 Insert llm_calls",
+      "name": "Supabase — Insert llm_calls",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -253,7 +237,7 @@
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\"workflow_id\":\"email-classification\",\"workflow_run_id\":\"{{$execution.id}}\",\"model\":\"{{$json.model}}\",\"prompt_tokens\":{{$json.usage.input_tokens}},\"output_tokens\":{{$json.usage.output_tokens}},\"duration_ms\":{{Math.max(1,Date.now()-new Date($execution.startedAt).getTime())}},\"cost_usd\":{{$json.cost_usd}},\"input\":{{JSON.stringify({\"messageId\":$json.messageId,\"subject\":$json.subject,\"from\":$json.from})}},\"output\":{{JSON.stringify($json.parsed)}},\"status\":\"ok\"}",
+        "jsonBody": "={{ JSON.stringify({ workflow_id: \"email-classification\", workflow_run_id: $execution.id, model: $json.model, prompt_tokens: $json.usage.input_tokens, output_tokens: $json.usage.output_tokens, duration_ms: Date.now() - $('Clean Body').first().json._ts_start, cost_usd: $json.cost_usd, input: { messageId: $json.messageId, subject: $json.subject, from: $json.from }, output: $json.parsed, status: \"ok\" }) }}",
         "specifyBody": "json"
       },
       "retryOnFail": true,
@@ -262,7 +246,7 @@
     }
   ],
   "connections": {
-    "IMAP \u2014 Poll Inbox": {
+    "IMAP — Poll Inbox": {
       "main": [
         [
           {
@@ -277,14 +261,14 @@
       "main": [
         [
           {
-            "node": "Anthropic \u2014 Classify",
+            "node": "Anthropic — Classify",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Anthropic \u2014 Classify": {
+    "Anthropic — Classify": {
       "main": [
         [
           {
@@ -304,7 +288,7 @@
             "index": 0
           },
           {
-            "node": "Supabase \u2014 Insert llm_calls",
+            "node": "Supabase — Insert llm_calls",
             "type": "main",
             "index": 0
           }
@@ -315,50 +299,44 @@
       "main": [
         [
           {
-            "node": "Slack \u2014 Route to Channel",
+            "node": "Slack — Route to Channel",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Slack \u2014 Route to Channel",
+            "node": "Slack — Route to Channel",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Slack \u2014 Route to Channel",
+            "node": "Slack — Route to Channel",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Slack \u2014 Route to Channel",
+            "node": "Slack — Route to Channel",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Slack \u2014 Route to Channel",
+            "node": "Slack — Route to Channel",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Slack \u2014 Route to Channel": {
+    "Slack — Route to Channel": {
       "main": [
-        [
-          {
-            "node": "IMAP \u2014 Mark Seen",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     }
   },
