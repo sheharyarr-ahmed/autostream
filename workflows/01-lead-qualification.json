@@ -1,53 +1,39 @@
 {
-  "name": "01 \u2014 Lead Qualification",
-  "active": false,
+  "name": "01 — Lead Qualification",
   "nodes": [
     {
-      "id": "node-webhook",
-      "name": "Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1.1,
-      "position": [
-        200,
-        300
-      ],
       "parameters": {
         "httpMethod": "POST",
         "path": "lead",
-        "responseMode": "lastNode",
-        "options": {
-          "rawBody": true
-        }
+        "options": {}
       },
-      "notes": "POST /webhook/lead \u2014 HMAC-signed via X-Signature header.",
-      "webhookId": "4ff631e0-98d8-4c02-9765-f791f96b38ef"
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "38deb5c6-6219-4621-ba01-2b99fc183df7",
+      "name": "Webhook",
+      "webhookId": "b6df1595-52e6-45d2-be30-6eb222c34ce8"
     },
     {
-      "id": "node-hmac",
-      "name": "Verify HMAC",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
-      "position": [
-        420,
-        300
-      ],
       "parameters": {
-        "functionCode": "const crypto = require('crypto');\nconst secret = $env.WEBHOOK_HMAC_SECRET;\nconst signature = $json.headers['x-signature'];\nconst body = JSON.stringify($json.body);\nconst expected = crypto.createHmac('sha256', secret).update(body).digest('hex');\nif (!signature || signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {\n  throw new Error('Invalid HMAC signature');\n}\nreturn $input.all();"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $env.WEBHOOK_HMAC_SECRET;\nconst signature = $json.headers['x-signature'];\nconst body = JSON.stringify($json.body);\n\nconst expected = crypto\n  .createHmac('sha256', secret)\n  .update(body)\n  .digest('hex');\n\nif (!signature) {\n  throw new Error('Missing x-signature header');\n}\n\nif (signature !== expected) {\n  throw new Error('Invalid HMAC signature');\n}\n\nreturn { ...$json.body, _ts_start: Date.now() };"
       },
-      "notes": "Constant-time HMAC verification. Throws on mismatch \u2192 error workflow."
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "645b8166-6c1c-4a1e-9d00-5e8b8d9e6197",
+      "name": "Verify HMAC"
     },
     {
-      "id": "node-anthropic",
-      "name": "Anthropic \u2014 Score Lead",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        640,
-        300
-      ],
       "parameters": {
-        "url": "https://api.anthropic.com/v1/messages",
         "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -66,160 +52,385 @@
           ]
         },
         "sendBody": true,
-        "bodyContentType": "json",
-        "jsonBody": "={\"model\":\"claude-haiku-4-5\",\"max_tokens\":512,\"system\":[{\"type\":\"text\",\"text\":\"You are a B2B-SaaS lead qualifier. Score the inbound lead on fit (low|medium|high), intent (research|evaluate|buy), and urgency (low|medium|high), and produce a 1-2 sentence rationale. Output JSON only matching: {score: 0-100, fit, intent, urgency, rationale}. No prose, no markdown fence.\",\"cache_control\":{\"type\":\"ephemeral\"}}],\"messages\":[{\"role\":\"user\",\"content\":{{JSON.stringify(JSON.stringify($json))}}}]}",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-haiku-4-5"
+            },
+            {
+              "name": "max_tokens",
+              "value": "={{ 512 }}"
+            },
+            {
+              "name": "system",
+              "value": "You are a B2B-SaaS lead qualifier. Score the inbound lead 0-100 on fit, intent, and urgency.  Return ONLY a valid JSON object. No markdown. No explanation. No code fences. No preamble. Just raw JSON.  The JSON must have this exact structure: {\"score\": <number 0-100>, \"fit\": \"low\"|\"medium\"|\"high\", \"intent\": \"research\"|\"evaluate\"|\"buy\", \"urgency\": \"low\"|\"medium\"|\"high\", \"reasoning\": \"<one sentence>\"}  CRITICAL: Your entire response must be parseable by JSON.parse(). Do not include backticks, headers, tables, or any text outside the JSON object. Start with { and end with }."
+            },
+            {
+              "name": "messages",
+              "value": "={{[{role: \"user\", content: JSON.stringify($json)}]}}"
+            }
+          ]
+        },
         "options": {
           "timeout": 30000
-        },
-        "specifyBody": "json"
+        }
       },
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 1000,
-      "notes": "Haiku 4.5 \u2014 routing decision, latency-sensitive. System prompt is cached."
-    },
-    {
-      "id": "node-validate",
-      "name": "Validate Output",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
-        860,
-        300
+        440,
+        0
       ],
-      "parameters": {
-        "functionCode": "const responseText = $json.content?.[0]?.text;\nconst cleaned = (responseText || '').replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\nlet output;\ntry { output = JSON.parse(cleaned); } catch (e) { throw new Error('Non-JSON from Claude: ' + (responseText||'').slice(0,200)); }\nconst schema = {\n  score:     v => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 100,\n  fit:       v => ['low','medium','high'].includes(v),\n  intent:    v => ['research','evaluate','buy'].includes(v),\n  urgency:   v => ['low','medium','high'].includes(v),\n  rationale: v => typeof v === 'string' && v.length >= 10 && v.length <= 500,\n};\nfor (const [field, check] of Object.entries(schema)) {\n  if (!check(output[field])) throw new Error('schema mismatch: ' + field + ' = ' + JSON.stringify(output[field]));\n}\nconst pricing = { 'claude-haiku-4-5': {i:1.0,o:5.0}, 'claude-opus-4-7': {i:15.0,o:75.0} };\nconst p = pricing[$json.model] || pricing['claude-haiku-4-5'];\nconst cost = ($json.usage.input_tokens * p.i + $json.usage.output_tokens * p.o) / 1_000_000;\nreturn [{ json: { parsed: output, usage: $json.usage, model: $json.model, cost_usd: cost, original: $node['Verify HMAC'].json } }];"
-      },
-      "notes": "Zod-equivalent strict validation + client-side cost calc."
+      "id": "b0de3cec-68fb-4733-bfce-5b07b10eb399",
+      "name": "Anthropic — Score Lead"
     },
     {
-      "id": "node-if-threshold",
-      "name": "Score \u2265 70?",
-      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst text = response.content?.[0]?.text || '';\n\n// Strip markdown code fences if present\nlet cleaned = text.replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\n\n// Extract JSON object from anywhere in the response (resilient to extra markdown)\nconst jsonMatch = cleaned.match(/\\{[\\s\\S]*\\}/);\nif (jsonMatch) {\n  cleaned = jsonMatch[0];\n}\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Non-JSON from Claude: ' + text.slice(0, 200));\n}\n\nif (typeof parsed.score !== 'number') throw new Error('Missing or invalid score field');\nif (!['low','medium','high'].includes(parsed.fit)) throw new Error('Invalid fit value: ' + parsed.fit);\nif (!['research','evaluate','buy'].includes(parsed.intent)) throw new Error('Invalid intent value: ' + parsed.intent);\nif (!['low','medium','high'].includes(parsed.urgency)) throw new Error('Invalid urgency value: ' + parsed.urgency);\n\nreturn { parsed: parsed, raw_response: response, model: response.model, usage: response.usage };"
+      },
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1080,
-        300
+        660,
+        0
       ],
+      "id": "60464fb5-33cd-45cb-9fa1-b377273e84f7",
+      "name": "Validate Output"
+    },
+    {
       "parameters": {
         "conditions": {
           "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
             "version": 2
           },
           "conditions": [
             {
-              "leftValue": "={{$json.parsed.score}}",
+              "id": "640e94a6-f66d-4bd1-a32f-cef2607a486b",
+              "leftValue": "={{ $json.parsed.score }}",
               "rightValue": 70,
               "operator": {
                 "type": "number",
                 "operation": "gte"
               }
             }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "56cbd5a2-e6eb-4de3-bd0c-4218d79c7cd5",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "=🎯 Qualified lead — score {{ $json.parsed.score }}"
+            },
+            {
+              "name": "username",
+              "value": "AutoStream"
+            },
+            {
+              "name": "icon_emoji",
+              "value": ":dart:"
+            }
           ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -100
+      ],
+      "id": "d3f326a7-17c5-4991-a230-446f641ce731",
+      "name": "Slack — Qualified Lead"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "llm_calls",
+          "mode": "list",
+          "cachedResultName": "llm_calls"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "workflow_id": "lead-qualification",
+            "workflow_run_id": "={{ $execution.id }}",
+            "model": "={{ $('Validate Output').first().json.model }}",
+            "duration_ms": "={{ Date.now() - $('Verify HMAC').first().json._ts_start }}",
+            "cost_usd": "={{ ($('Validate Output').first().json.usage.input_tokens + $('Validate Output').first().json.usage.output_tokens * 5) / 1000000 }}",
+            "prompt_tokens": "={{ $('Validate Output').first().json.usage.input_tokens }}",
+            "output_tokens": "={{ $('Validate Output').first().json.usage.output_tokens }}",
+            "input": "={{ JSON.stringify($('Webhook').first().json.body) }}",
+            "output": "={{ JSON.stringify($('Validate Output').first().json.parsed) }}",
+            "status": "ok"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow_id",
+              "displayName": "workflow_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "model",
+              "displayName": "model",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "prompt_tokens",
+              "displayName": "prompt_tokens",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "output_tokens",
+              "displayName": "output_tokens",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "duration_ms",
+              "displayName": "duration_ms",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cost_usd",
+              "displayName": "cost_usd",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "input",
+              "displayName": "input",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "output",
+              "displayName": "output",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1320,
+        -100
+      ],
+      "id": "b50afe4f-4bef-4881-bfc6-4a6a1f808456",
+      "name": "Supabase — Insert llm_calls",
+      "credentials": {
+        "postgres": {
+          "id": "phKvVxQaTPlJPNdT",
+          "name": "Postgres account"
         }
-      },
-      "notes": "Threshold gates Slack alert. All leads still log to llm_calls."
+      }
     },
     {
-      "id": "node-slack",
-      "name": "Slack \u2014 Qualified Lead",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1300,
-        200
-      ],
       "parameters": {
-        "url": "={{$env.SLACK_WEBHOOK_URL}}",
-        "method": "POST",
-        "sendBody": true,
-        "bodyContentType": "json",
-        "jsonBody": "={\"blocks\":[{\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"\ud83c\udfaf Qualified lead \u2014 score {{$json.parsed.score}}\"}},{\"type\":\"section\",\"fields\":[{\"type\":\"mrkdwn\",\"text\":\"*Intent*\\n{{$json.parsed.intent}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Fit*\\n{{$json.parsed.fit}}\"},{\"type\":\"mrkdwn\",\"text\":\"*Urgency*\\n{{$json.parsed.urgency}}\"}]},{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*Rationale*\\n{{$json.parsed.rationale}}\"}},{\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"workflow_run_id: `{{$execution.id}}`\"}]}]}",
-        "specifyBody": "json"
-      },
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 1000
-    },
-    {
-      "id": "node-log-llm",
-      "name": "Supabase \u2014 Insert llm_calls",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1300,
-        400
-      ],
-      "parameters": {
-        "url": "={{$env.SUPABASE_URL}}/rest/v1/llm_calls",
-        "method": "POST",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "workflow_runs",
+          "mode": "list",
+          "cachedResultName": "workflow_runs"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "workflow_id": "lead-qualification",
+            "status": "ok",
+            "duration_ms": "={{ Date.now() - $('Verify HMAC').first().json._ts_start }}",
+            "started_at": "={{ new Date($('Verify HMAC').first().json._ts_start).toISOString() }}",
+            "ended_at": "={{ new Date().toISOString() }}",
+            "meta": "={{ JSON.stringify({ score: $('Validate Output').first().json.parsed.score, fit: $('Validate Output').first().json.parsed.fit, intent: $('Validate Output').first().json.parsed.intent, urgency: $('Validate Output').first().json.parsed.urgency }) }}",
+            "id": "={{ $execution.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
             {
-              "name": "apikey",
-              "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+              "id": "id",
+              "displayName": "id",
+              "required": true,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
-              "name": "Authorization",
-              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+              "id": "workflow_id",
+              "displayName": "workflow_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
             },
             {
-              "name": "content-type",
-              "value": "application/json"
+              "id": "status",
+              "displayName": "status",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "id": "duration_ms",
+              "displayName": "duration_ms",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ended_at",
+              "displayName": "ended_at",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "meta",
+              "displayName": "meta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
             }
           ]
         },
-        "sendBody": true,
-        "bodyContentType": "json",
-        "jsonBody": "={\"workflow_id\":\"lead-qualification\",\"workflow_run_id\":\"{{$execution.id}}\",\"model\":\"{{$json.model}}\",\"prompt_tokens\":{{$json.usage.input_tokens}},\"output_tokens\":{{$json.usage.output_tokens}},\"duration_ms\":{{Math.max(1,Date.now()-new Date($execution.startedAt).getTime())}},\"cost_usd\":{{$json.cost_usd}},\"input\":{{JSON.stringify($json.original)}},\"output\":{{JSON.stringify($json.parsed)}},\"status\":\"ok\"}",
-        "specifyBody": "json"
+        "options": {}
       },
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 1000
-    },
-    {
-      "id": "node-log-run",
-      "name": "Supabase \u2014 Insert workflow_runs",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
-        1520,
-        400
+        1540,
+        -100
       ],
-      "parameters": {
-        "url": "={{$env.SUPABASE_URL}}/rest/v1/workflow_runs",
-        "method": "POST",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
-            },
-            {
-              "name": "content-type",
-              "value": "application/json"
-            },
-            {
-              "name": "Prefer",
-              "value": "return=minimal"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyContentType": "json",
-        "jsonBody": "={\"id\":\"{{$execution.id}}\",\"workflow_id\":\"lead-qualification\",\"status\":\"ok\",\"duration_ms\":{{Math.max(1,Date.now()-new Date($execution.startedAt).getTime())}},\"started_at\":\"{{new Date($execution.startedAt).toISOString()}}\",\"ended_at\":\"{{new Date().toISOString()}}\",\"meta\":{}}",
-        "specifyBody": "json"
+      "id": "cb5afe75-21f1-4542-b6c2-4332b083adb6",
+      "name": "Supabase — Insert workflow_runs",
+      "credentials": {
+        "postgres": {
+          "id": "phKvVxQaTPlJPNdT",
+          "name": "Postgres account"
+        }
       }
     }
   ],
@@ -239,14 +450,14 @@
       "main": [
         [
           {
-            "node": "Anthropic \u2014 Score Lead",
+            "node": "Anthropic — Score Lead",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Anthropic \u2014 Score Lead": {
+    "Anthropic — Score Lead": {
       "main": [
         [
           {
@@ -261,35 +472,40 @@
       "main": [
         [
           {
-            "node": "Score \u2265 70?",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Supabase \u2014 Insert llm_calls",
+            "node": "If",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Score \u2265 70?": {
+    "If": {
       "main": [
         [
           {
-            "node": "Slack \u2014 Qualified Lead",
+            "node": "Slack — Qualified Lead",
             "type": "main",
             "index": 0
           }
-        ],
-        []
+        ]
       ]
     },
-    "Supabase \u2014 Insert llm_calls": {
+    "Slack — Qualified Lead": {
       "main": [
         [
           {
-            "node": "Supabase \u2014 Insert workflow_runs",
+            "node": "Supabase — Insert llm_calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase — Insert llm_calls": {
+      "main": [
+        [
+          {
+            "node": "Supabase — Insert workflow_runs",
             "type": "main",
             "index": 0
           }
@@ -297,11 +513,9 @@
       ]
     }
   },
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "tags": [
-    "autostream",
-    "lead-qualification"
-  ]
+  "tags": []
 }
