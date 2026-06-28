@@ -9,7 +9,7 @@ Every incoming webhook is HMAC-SHA256 signed. The webhook node's first child is 
 3. Constant-time compares against the header. **Never** `==` on raw strings — use `crypto.timingSafeEqual`.
 4. On mismatch: do NOT call Claude, do NOT log to `llm_calls`.
 
-> **Current implementation vs. target (Phase 1).** WF1's verify node enforces points 1–3 and, on mismatch, *throws* — so a forged request never reaches Claude or `llm_calls` (the security property holds). It does **not** yet return a clean 401: the webhook acks 200 on receipt and the throw routes to the error workflow. Returning a real 401 and not paging `#autostream-errors` on auth failure is a tracked **pre-public-deploy** hardening item (`docs/PHASE-ROADMAP.md`, Phase 2). The endpoint stays local-only until then.
+> **Current implementation (Phase 1).** WF1 runs the webhook in `responseNode` mode. The verify node enforces points 1–3 and computes validity *without throwing*; an `Auth OK` IF routes valid traffic to a 200 ack then the scoring chain, and invalid traffic to a `Respond 401` node that is a dead end — no model call, no `llm_calls`, no `error_log`. A forged or missing signature therefore gets a clean **401** and does **not** page `#autostream-errors` (a bad signature is expected hostile traffic, not an operational error). Verified locally: forged/missing sig → 401 with zero `error_log`/`llm_calls` rows; valid sig → 200 + full green chain. This closes the pre-public-deploy auth-hardening gate.
 
 The HMAC secret rotates by updating `WEBHOOK_HMAC_SECRET` in `.env` and restarting the n8n container. There's no in-band rotation — the cost (5 min downtime) is acceptable for a portfolio-scale demo.
 
