@@ -17,23 +17,23 @@ Signature header: `X-Signature` (hex-encoded HMAC of the raw request body).
 ### Node graph
 
 ```
-Webhook (HMAC-verified)
-  → Validate Input (Zod-equivalent: required fields email + intent + budget)
-  → HTTP Request → Anthropic Claude (Haiku 4.5)
-  → IF score ≥ threshold
-      → Slack (post to #sales-leads with enriched fields)
-  → Supabase Insert → llm_calls
+Webhook (HMAC-verified, timingSafeEqual)
+  → Anthropic Claude (Haiku 4.5)
+  → Zod-equivalent validation (score + fit + intent + urgency)
+  → Supabase Insert → llm_calls       (runs on EVERY execution)
   → Supabase Insert → workflow_runs
+  ↘ IF score ≥ 70
+      → Slack (post to #autostream-alerts)
   (error workflow on any failure → Slack #autostream-errors + error_log)
 ```
 
 ### Expressions
-- HMAC verify: `crypto.createHmac('sha256', $env.WEBHOOK_HMAC_SECRET).update(JSON.stringify($json)).digest('hex') === $headers['x-signature']`
+- HMAC verify: `crypto.createHmac('sha256', $env.WEBHOOK_HMAC_SECRET).update(JSON.stringify($json.body)).digest('hex')` — compared with `$json.headers['x-signature']` via `crypto.timingSafeEqual` (buffers must match length first)
 - Score threshold: `parseInt($json.output.score, 10) >= 70`
 - Cost calc: `($json.usage.input_tokens * 1.00 + $json.usage.output_tokens * 5.00) / 1000000` (Haiku 4.5 pricing per million)
 
 ### Retry policy
-Max **2 attempts** on the Anthropic HTTP node. Exponential backoff (1s, 4s). After 2 failures, route to error workflow.
+Max **2 attempts** (`retryOnFail: true, maxTries: 2, waitBetweenTries: 1000`) on the Anthropic HTTP node, both Supabase nodes, and the Slack node. After 2 failures on any node, the error workflow fires.
 
 ### Output schema (Zod-equivalent — see `.claude/skills/anthropic-claude-integration/core.md`)
 ```json
@@ -121,15 +121,14 @@ IMAP (poll every 5 min, UNSEEN)
   → Function: strip HTML, extract body + subject + from + thread headers
   → HTTP Request → Anthropic Claude (Haiku 4.5)
   → Zod-equivalent validation (category + urgency + confidence)
-  → Switch on category:
-      sales      → Slack #inbox-sales
-      support    → Slack #inbox-support
-      recruiting → Slack #inbox-recruiting
-      billing    → Slack #inbox-billing
-      other      → Slack #inbox-other
-  → IMAP: mark as Seen
-  → Supabase Insert → llm_calls
-  → Supabase Insert → workflow_runs
+  → Switch on category (4 rules + fallback):
+      all 5 outputs converge at one Slack node; URL is a ternary expression:
+        $env.SLACK_WEBHOOK_SALES / SUPPORT / RECRUITING / BILLING / OTHER
+      each category therefore routes to its own channel via its own webhook URL
+  → Supabase Insert → llm_calls       (runs unconditionally from Validate Classification)
+  (mark-as-seen: postProcessAction="nothing" — n8n 1.71.3 Email Trigger has no downstream
+   IMAP flag API; emails stay UNSEEN until re-poll; mark-seen-after-success requires Phase 2
+   using a Code node with a raw IMAP STORE command or a separate IMAP action credential)
   (error workflow → Slack + error_log; email NOT marked seen on failure)
 ```
 
