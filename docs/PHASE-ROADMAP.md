@@ -39,6 +39,7 @@ AutoStream's evolution from portfolio demo (Phase 1) to multi-tenant SaaS (Phase
 **Goal:** Take AutoStream from portfolio to deployable-for-a-real-team. Single-tenant still, but operationally robust.
 
 **Additions:**
+- **Webhook auth hardening (gate before any public endpoint)**: the lead webhook responds 200 on receipt (n8n immediate-ack) and the HMAC check then *throws* on a bad signature — so a forged request is rejected without ever reaching Claude or `llm_calls`, but the caller still sees 200 and the failure trips the error workflow. Before exposing the endpoint publicly (Railway), switch WF1 to respond via a "Respond to Webhook" node returning a clean **401** on HMAC failure, and stop auth failures from paging `#autostream-errors` (a bad signature is expected hostile traffic, not an operational error). Until then the endpoint is local-only.
 - **Queue mode**: Redis + 3 n8n worker replicas. See `SCALING.md` Phase A.
 - **More content sources**: Bluesky firehose, ATOM feeds, Hacker News API, Twitter list scrapes (when rate-limit permits).
 - **More email accounts**: support N IMAP accounts (one set of envs per account); classify across all of them into the same Slack workspace.

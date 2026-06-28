@@ -7,7 +7,9 @@ Every incoming webhook is HMAC-SHA256 signed. The webhook node's first child is 
 1. Reads `X-Signature` header.
 2. Computes `crypto.createHmac('sha256', $env.WEBHOOK_HMAC_SECRET).update(rawBody).digest('hex')`.
 3. Constant-time compares against the header. **Never** `==` on raw strings — use `crypto.timingSafeEqual`.
-4. On mismatch: return HTTP 401 immediately, do NOT call Claude, do NOT log to `llm_calls`.
+4. On mismatch: do NOT call Claude, do NOT log to `llm_calls`.
+
+> **Current implementation vs. target (Phase 1).** WF1's verify node enforces points 1–3 and, on mismatch, *throws* — so a forged request never reaches Claude or `llm_calls` (the security property holds). It does **not** yet return a clean 401: the webhook acks 200 on receipt and the throw routes to the error workflow. Returning a real 401 and not paging `#autostream-errors` on auth failure is a tracked **pre-public-deploy** hardening item (`docs/PHASE-ROADMAP.md`, Phase 2). The endpoint stays local-only until then.
 
 The HMAC secret rotates by updating `WEBHOOK_HMAC_SECRET` in `.env` and restarting the n8n container. There's no in-band rotation — the cost (5 min downtime) is acceptable for a portfolio-scale demo.
 
