@@ -1,9 +1,34 @@
-# AutoStream
+<p align="center">
+  <img src="assets/icon-glow-512.png" alt="AutoStream" width="160" />
+</p>
 
-A portfolio reference for what production n8n + Claude work looks like when shipped, not prototyped — three workflows, every LLM call logged, every webhook signed, every output validated.
+<h1 align="center">AutoStream</h1>
 
-> Self-hosted on Docker (n8n Community Edition). All three workflows verified green end-to-end on a live local stack — real Anthropic calls, real Slack posts, real Supabase rows. Source open.
-> Status: shipped and demoable locally. Railway deploy is a documented Phase-2 step; demo video pending.
+<p align="center">
+  <b>Production-grade AI automation, observable by design.</b><br/>
+  Three independent n8n + Claude workflows — every LLM call logged, every webhook signed, every output validated.
+</p>
+
+<p align="center">
+  <a href="#what-autostream-does">About</a> ·
+  <a href="#deployment">Deployment</a> ·
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="docs/WORKFLOWS.md">Workflows</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#observability">Observability</a> ·
+  <a href=".claude/decisions/">Decisions</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/orchestration-n8n-EA4B71?style=flat-square" alt="n8n" />
+  <img src="https://img.shields.io/badge/LLM-Anthropic_Claude-D97757?style=flat-square" alt="Anthropic Claude" />
+  <img src="https://img.shields.io/badge/observability-Supabase-3FCF8E?style=flat-square" alt="Supabase" />
+  <img src="https://img.shields.io/badge/license-MIT-2D6CDF?style=flat-square" alt="MIT" />
+</p>
+
+---
+
+> **Status:** Deployed to Railway — self-hosted n8n on Docker behind a public HTTPS endpoint. All three workflows verified green end-to-end **in production** — real Anthropic calls, real Slack alerts, real Supabase rows. The lead webhook is HMAC-gated: a forged or missing signature is rejected with a clean `401` before any model call. Source open.
 
 ---
 
@@ -72,7 +97,7 @@ AutoStream solves all five for the three workflows most small teams actually nee
 ### 3. Email Classification
 
 **Trigger:** IMAP poll (Gmail).
-**Flow:** Fetch unseen → Claude Haiku 4.5 classifies into `{sales, support, recruiting, billing, other}` + extracts urgency and confidence → Switch routes by category (one Slack webhook configured; per-category channels are a config change away) → mark seen → log to `llm_calls`.
+**Flow:** Fetch unseen → Claude Haiku 4.5 classifies into `{sales, support, recruiting, billing, other}` + extracts urgency and confidence → Switch routes each category to its **own** Slack webhook (`SLACK_WEBHOOK_{SALES,SUPPORT,RECRUITING,BILLING,OTHER}`) → mark seen → log to `llm_calls`.
 **Return:** A shared inbox stops being a black hole. Each email surfaces in Slack, tagged with its category, within a minute.
 
 ---
@@ -166,7 +191,20 @@ create index on llm_calls (workflow_id, created_at desc);
 create index on llm_calls (status) where status != 'ok';
 ```
 
-`workflow_run_id` is `text`, not `uuid` — n8n execution ids are sequential integers, so the run-id columns store the real execution id to link a row back to its n8n execution page. Two more tables — `workflow_runs` and `error_log` — capture per-run metadata and failures. Full DDL in [`supabase/migrations/0001_observability_tables.sql`](supabase/migrations/0001_observability_tables.sql); the run-id retype is in [`0002_exec_id_text.sql`](supabase/migrations/0002_exec_id_text.sql).
+`workflow_run_id` is `text`, not `uuid` — n8n execution ids are sequential integers, so the run-id columns store the real execution id to link a row back to its n8n execution page. Two more tables — `workflow_runs` and `error_log` — capture per-run metadata and failures. Full DDL in [`supabase/migrations/0001_observability_tables.sql`](supabase/migrations/0001_observability_tables.sql); the run-id retype is in [`0002_exec_id_text.sql`](supabase/migrations/0002_exec_id_text.sql); the `error_log.attempt_count` column is in [`0003_error_log_attempt_count.sql`](supabase/migrations/0003_error_log_attempt_count.sql).
+
+---
+
+## Deployment
+
+AutoStream is deployed to **Railway** as two services — n8n (`n8nio/n8n`, version-pinned) and a Postgres for n8n's own state. All n8n state lives in Postgres and the encryption key is supplied as an env var, so no persistent volume is needed; observability still writes to Supabase. The lead webhook is public over HTTPS.
+
+The HMAC gate is verified **in production**:
+
+- Forged / missing signature → `HTTP 401 {"error":"unauthorized"}`, with **zero** `llm_calls` and **zero** `error_log` rows (rejected before any model call; auth failures don't page the error channel).
+- Valid signature → `HTTP 200`, full chain logged to Supabase (`llm_calls` + `workflow_runs`) and a Slack alert for qualified leads.
+
+The live demo runs on Railway's free trial ($5 / 30-day window), so the public URL is time-boxed. The same Docker image + env configuration deploys to any host for a permanent install — see [`docs/PHASE-ROADMAP.md`](docs/PHASE-ROADMAP.md).
 
 ---
 
@@ -190,6 +228,7 @@ Apply the Supabase migrations (in order), or paste them into the Supabase SQL ed
 ```bash
 psql "$SUPABASE_URL" -f supabase/migrations/0001_observability_tables.sql
 psql "$SUPABASE_URL" -f supabase/migrations/0002_exec_id_text.sql
+psql "$SUPABASE_URL" -f supabase/migrations/0003_error_log_attempt_count.sql
 ```
 
 Note: the IMAP node (Workflow 3) needs an IMAP credential created in the n8n UI and attached before activation; the Postgres node (Workflow 1) needs a Postgres credential pointing at your Supabase pooler. Webhook (WF1) and HTTP nodes read secrets from `$env`.
@@ -213,8 +252,9 @@ A qualified lead (score ≥ 70) fires a Slack alert within a few seconds; every 
 
 ```
 autostream/
-├── workflows/                 # 3 n8n workflow JSONs
+├── workflows/                 # 3 n8n workflow JSONs + shared error handler
 ├── supabase/migrations/       # observability schema
+├── assets/                    # brand assets — icon, favicons, social card
 ├── docs/                      # WORKFLOWS, SCALING, TROUBLESHOOTING, PHASE-ROADMAP
 ├── .claude/                   # Claude Code project context (agents, skills, rules, ADRs)
 ├── .githooks/commit-msg       # blocks AI attribution in commit messages
@@ -236,8 +276,7 @@ autostream/
 
 ## Limitations
 
-- **Local deployment.** Currently runs self-hosted via Docker; not deployed to a public host. Railway (free-trial Docker target) is documented in ADR 0001 as the Phase-2 deploy step.
-- **Single Slack webhook.** Workflow 3 routes by category internally but posts to one configured webhook; per-category channels require additional webhook URLs.
+- **Time-boxed demo host.** The live deployment runs on Railway's free trial (30-day window); the public URL expires with it. A permanent install needs a paid host or a long-running self-host — the Docker image + env config is unchanged either way.
 - **Single-tenant.** No org/user model. One n8n instance per deployment.
 - **No queue mode.** All execution in-process. Scaling notes in `docs/SCALING.md`.
 - **English-only prompts.** Multilingual classification not tuned.
