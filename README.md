@@ -66,6 +66,36 @@ Costs are the actual `cost_usd` values logged to `llm_calls` for one run each �
 
 ---
 
+## Screenshots
+
+Captured from the live deployment — the running workflows, the security gate, the alerts, and the observability rows they produce.
+
+**Lead Qualification, live and `Active` in n8n.** The full chain: `Webhook` → `Verify HMAC` → `Auth OK` gate (forged traffic dead-ends at `Respond 401`) → `Anthropic — Score Lead` (Haiku 4.5) → `Validate Output` → conditional Slack alert, with `llm_calls` and `workflow_runs` inserts on every execution.
+
+![Workflow 1 (Lead Qualification) open in the n8n editor, toggled Active](assets/screenshots/n8n-lead-qualification.png)
+
+**It runs green end-to-end.** Execution history for the lead workflow — three consecutive successful runs, the latest (`ID#4`) succeeding in `3.345s` with every node showing a green check through both Supabase inserts.
+
+![n8n execution history showing three successful runs of the lead workflow](assets/screenshots/n8n-executions.png)
+
+**The HMAC gate, exercised from the terminal.** A forged signature is rejected with `{"error":"unauthorized"}` / `HTTP 401` *before* any model call; a valid signature returns `{"status":"accepted"}` / `HTTP 200`.
+
+![Terminal output showing a forged signature returning 401 and a valid signature returning 200](assets/screenshots/hmac-401-gate.png)
+
+**Alerts land in Slack.** The `#autostream-alerts` channel: the AutoStream Notifier app posts qualified-lead alerts (`Qualified lead — score 85`) and classified inbound email (`[MEDIUM] … · category: recruiting · confidence: 0.95`).
+
+![Slack channel autostream-alerts showing qualified-lead and email-classification messages](assets/screenshots/slack-alerts.png)
+
+**Every call is observable.** The `llm_calls` table in the production Supabase project (`autostream-prod`, `main` / `PRODUCTION`) — 19 rows of real calls, each carrying `model`, `prompt_tokens`, `output_tokens`, `duration_ms`, and `cost_usd`. Haiku rows sit at ~$0.0004–0.0006; the single `daily-content-brief` Opus row is $0.182025 — the cost gap the observability layer exists to surface.
+
+![Supabase table editor showing the llm_calls table with 19 production rows](assets/screenshots/supabase-llm-calls.png)
+
+**The public landing page.** Workflow summaries, the "shipped, not prototyped" guarantees, and a live status pill: `Deployed on Railway · HMAC-gated webhook (clean 401) · verified in production`.
+
+![AutoStream GitHub Pages landing page](assets/screenshots/landing-page.png)
+
+---
+
 ## The Problem
 
 Most n8n workflows in the wild fail one of these tests:
