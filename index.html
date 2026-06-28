@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoStream — Production-grade AI automation, observable by design</title>
+  <meta name="description" content="Three independent n8n + Claude workflows — every LLM call logged, every webhook signed, every output validated. Deployed on Railway, observability on Supabase." />
+
+  <!-- Favicons / icons -->
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png" />
+  <link rel="manifest" href="site.webmanifest" />
+  <meta name="theme-color" content="#0d1b2e" />
+
+  <!-- OpenGraph / Twitter (link unfurls) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="AutoStream — Production-grade AI automation, observable by design" />
+  <meta property="og:description" content="Three independent n8n + Claude workflows — every LLM call logged, every webhook signed, every output validated." />
+  <meta property="og:image" content="https://sheharyarr-ahmed.github.io/autostream/assets/social-card.png" />
+  <meta property="og:url" content="https://sheharyarr-ahmed.github.io/autostream/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="AutoStream" />
+  <meta name="twitter:description" content="Production-grade AI automation, observable by design." />
+  <meta name="twitter:image" content="https://sheharyarr-ahmed.github.io/autostream/assets/social-card.png" />
+
+  <style>
+    :root {
+      --bg: #0d1b2e;
+      --bg-2: #142440;
+      --card: #16294a;
+      --line: #24395f;
+      --text: #eaf1fb;
+      --muted: #9fb3c8;
+      --amber: #f5a623;
+      --white: #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: radial-gradient(1200px 600px at 50% -10%, #1a2d4f 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+
+    /* Hero */
+    .hero { text-align: center; padding: 88px 0 56px; }
+    .hero img.icon { width: 150px; height: 150px; filter: drop-shadow(0 12px 40px rgba(245,166,35,0.18)); }
+    .hero h1 { font-size: 56px; font-weight: 800; letter-spacing: -1px; margin: 22px 0 6px; }
+    .hero h1 .accent { color: var(--amber); }
+    .hero .tagline { color: var(--muted); font-size: 17px; }
+    .hero .sub { color: var(--text); max-width: 600px; margin: 16px auto 0; }
+
+    /* Nav links */
+    .nav { margin: 26px 0 6px; display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; }
+    .nav a { color: var(--muted); text-decoration: none; font-size: 15px; }
+    .nav a:hover { color: var(--amber); }
+
+    /* Badges */
+    .badges { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .badge {
+      font-size: 12px; padding: 5px 12px; border: 1px solid var(--line);
+      border-radius: 999px; color: var(--muted); background: rgba(255,255,255,0.02);
+    }
+
+    /* CTA */
+    .cta { margin-top: 30px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn { text-decoration: none; font-weight: 600; font-size: 15px; padding: 11px 22px; border-radius: 10px; transition: transform .08s ease, background .15s ease; }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary { background: var(--amber); color: #1b1303; }
+    .btn-primary:hover { background: #ffb733; }
+    .btn-ghost { border: 1px solid var(--line); color: var(--text); }
+    .btn-ghost:hover { border-color: var(--amber); color: var(--amber); }
+
+    /* Status pill */
+    .status { display: inline-flex; align-items: center; gap: 8px; margin-top: 30px; font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #3fcf8e; box-shadow: 0 0 10px #3fcf8e; }
+
+    /* Sections */
+    section { padding: 40px 0; }
+    .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 2px; color: var(--amber); margin-bottom: 20px; text-align: center; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .feat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+    .feat h3 { font-size: 17px; margin-bottom: 8px; }
+    .feat p { color: var(--muted); font-size: 14px; }
+    .feat .k { color: var(--amber); font-size: 12px; letter-spacing: .5px; text-transform: uppercase; }
+
+    .props { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 24px; max-width: 760px; margin: 0 auto; }
+    .prop { display: flex; gap: 10px; align-items: flex-start; color: var(--muted); font-size: 15px; }
+    .prop b { color: var(--text); font-weight: 600; }
+    .check { color: var(--amber); flex: none; }
+
+    footer { text-align: center; padding: 48px 0 64px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); margin-top: 24px; }
+    footer a { color: var(--amber); text-decoration: none; }
+
+    @media (max-width: 720px) {
+      .hero h1 { font-size: 42px; }
+      .grid { grid-template-columns: 1fr; }
+      .props { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <img class="icon" src="assets/icon-glow-512.png" alt="AutoStream icon — a gear split between night and sunrise" />
+      <h1>Auto<span class="accent">Stream</span></h1>
+      <p class="tagline mono">Production-grade AI automation, observable by design.</p>
+      <p class="sub">Three independent n8n&nbsp;+&nbsp;Claude workflows — every LLM call logged, every webhook signed, every output validated.</p>
+
+      <nav class="nav">
+        <a href="https://github.com/sheharyarr-ahmed/autostream#what-autostream-does">About</a>
+        <a href="https://github.com/sheharyarr-ahmed/autostream#deployment">Deployment</a>
+        <a href="https://github.com/sheharyarr-ahmed/autostream#quickstart">Quickstart</a>
+        <a href="https://github.com/sheharyarr-ahmed/autostream/blob/main/docs/WORKFLOWS.md">Workflows</a>
+        <a href="https://github.com/sheharyarr-ahmed/autostream#observability">Observability</a>
+        <a href="https://github.com/sheharyarr-ahmed/autostream/tree/main/.claude/decisions">Decisions</a>
+      </nav>
+
+      <div class="badges">
+        <span class="badge">n8n (self-hosted)</span>
+        <span class="badge">Anthropic Claude</span>
+        <span class="badge">Supabase</span>
+        <span class="badge">Railway</span>
+        <span class="badge">MIT</span>
+      </div>
+
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/sheharyarr-ahmed/autostream">View on GitHub</a>
+        <a class="btn btn-ghost" href="https://github.com/sheharyarr-ahmed/autostream/blob/main/docs/WORKFLOWS.md">Read the workflows</a>
+      </div>
+
+      <div class="status"><span class="dot"></span> Deployed on Railway · HMAC-gated webhook (clean 401) · verified in production</div>
+    </header>
+
+    <section id="workflows">
+      <div class="section-title">Three workflows</div>
+      <div class="grid">
+        <div class="feat">
+          <div class="k">Webhook · Haiku</div>
+          <h3>Lead Qualification</h3>
+          <p>HMAC-signed lead in → Claude scores fit, intent, urgency → Slack alert for qualified leads → logged to Postgres. Forged signature → clean 401.</p>
+        </div>
+        <div class="feat">
+          <div class="k">Cron · Opus</div>
+          <h3>Daily Content Brief</h3>
+          <p>RSS at 09:00, deduped by GUID → Opus critic selects and summarizes the few items that matter → posted to Slack, archived to Postgres.</p>
+        </div>
+        <div class="feat">
+          <div class="k">IMAP · Haiku</div>
+          <h3>Email Classification</h3>
+          <p>Poll inbox → Claude classifies into sales / support / recruiting / billing / other → routes each to its own Slack channel → logged.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="discipline">
+      <div class="section-title">Shipped, not prototyped</div>
+      <div class="props">
+        <div class="prop"><span class="check">✓</span><span><b>Full observability</b> — every LLM call writes input, output, tokens, duration, and cost to Supabase.</span></div>
+        <div class="prop"><span class="check">✓</span><span><b>Validated outputs</b> — Zod-equivalent schema checks; malformed responses fail loudly, not silently.</span></div>
+        <div class="prop"><span class="check">✓</span><span><b>Bounded retry</b> — max two attempts on every external call; no runaway cost loops.</span></div>
+        <div class="prop"><span class="check">✓</span><span><b>Signed webhooks</b> — HMAC-SHA256, constant-time compare, clean 401 before any model call.</span></div>
+        <div class="prop"><span class="check">✓</span><span><b>No silent failures</b> — every error writes <span class="mono">error_log</span> and pages a Slack channel.</span></div>
+        <div class="prop"><span class="check">✓</span><span><b>Clean git history</b> — single author, conventional commits, hook-enforced.</span></div>
+      </div>
+    </section>
+
+    <footer>
+      Built by <a href="https://github.com/sheharyarr-ahmed">Sheharyar Ahmed</a> — AI-native software engineer.<br />
+      AutoStream is asset #2 of Project Auto-Stream. Available for n8n&nbsp;+&nbsp;Claude API engagements.
+    </footer>
+  </div>
+</body>
+</html>
