@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.WEBHOOK_HMAC_SECRET;\nconst signature = $json.headers['x-signature'];\nconst body = JSON.stringify($json.body);\n\nconst expected = crypto\n  .createHmac('sha256', secret)\n  .update(body)\n  .digest('hex');\n\nif (!signature) {\n  throw new Error('Missing x-signature header');\n}\n\nif (signature !== expected) {\n  throw new Error('Invalid HMAC signature');\n}\n\nreturn { ...$json.body, _ts_start: Date.now() };"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $env.WEBHOOK_HMAC_SECRET;\nconst signature = $json.headers['x-signature'];\nconst body = JSON.stringify($json.body);\n\nconst expected = crypto\n  .createHmac('sha256', secret)\n  .update(body)\n  .digest('hex');\n\nif (!signature) {\n  throw new Error('Missing x-signature header');\n}\n\nconst sigBuf = Buffer.from(signature, 'hex');\nconst expBuf = Buffer.from(expected, 'hex');\nif (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {\n  throw new Error('Invalid HMAC signature');\n}\n\nreturn { ...$json.body, _ts_start: Date.now() };"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -83,7 +83,10 @@
         0
       ],
       "id": "b0de3cec-68fb-4733-bfce-5b07b10eb399",
-      "name": "Anthropic — Score Lead"
+      "name": "Anthropic — Score Lead",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -161,7 +164,10 @@
         -100
       ],
       "id": "d3f326a7-17c5-4991-a230-446f641ce731",
-      "name": "Slack — Qualified Lead"
+      "name": "Slack — Qualified Lead",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -310,11 +316,14 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1320,
-        -100
+        880,
+        240
       ],
       "id": "b50afe4f-4bef-4881-bfc6-4a6a1f808456",
       "name": "Supabase — Insert llm_calls",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
       "credentials": {
         "postgres": {
           "id": "phKvVxQaTPlJPNdT",
@@ -421,11 +430,14 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1540,
-        -100
+        1100,
+        240
       ],
       "id": "cb5afe75-21f1-4542-b6c2-4332b083adb6",
       "name": "Supabase — Insert workflow_runs",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
       "credentials": {
         "postgres": {
           "id": "phKvVxQaTPlJPNdT",
@@ -472,6 +484,11 @@
       "main": [
         [
           {
+            "node": "Supabase — Insert llm_calls",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "If",
             "type": "main",
             "index": 0
@@ -492,13 +509,7 @@
     },
     "Slack — Qualified Lead": {
       "main": [
-        [
-          {
-            "node": "Supabase — Insert llm_calls",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Supabase — Insert llm_calls": {
@@ -515,7 +526,8 @@
   },
   "active": true,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "errorWorkflow": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
   },
   "tags": []
 }
