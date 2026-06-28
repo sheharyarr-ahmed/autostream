@@ -19,7 +19,7 @@
           "forceReconnect": 30,
           "allowUnauthorizedCerts": false
         },
-        "postProcessAction": "read"
+        "postProcessAction": "nothing"
       },
       "notes": "5-min polling cadence (set in workflow settings). DO NOT auto-mark-seen — done after success path completes.",
       "credentials": {
@@ -221,7 +221,7 @@
         300
       ],
       "parameters": {
-        "url": "={{$env.SLACK_WEBHOOK_URL}}",
+        "url": "={{ $json.parsed.category === 'sales' ? $env.SLACK_WEBHOOK_SALES : $json.parsed.category === 'support' ? $env.SLACK_WEBHOOK_SUPPORT : $json.parsed.category === 'recruiting' ? $env.SLACK_WEBHOOK_RECRUITING : $json.parsed.category === 'billing' ? $env.SLACK_WEBHOOK_BILLING : $env.SLACK_WEBHOOK_OTHER }}",
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
@@ -371,7 +371,8 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "errorWorkflow": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
   },
   "tags": [
     "autostream",
