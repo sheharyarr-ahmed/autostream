@@ -285,9 +285,9 @@ autostream/
 
 ## About
 
-Built by [Sheharyar Ahmed](https://sheharyarr.dev) — AI-native software engineer, MERN + Native iOS + Python AI. AutoStream is asset #2 of Project Auto-Stream, a portfolio of production-grade automation artifacts.
+Built by [Sheharyar Ahmed](https://sheharyarr.dev) — AI-native software engineer, MERN + Native iOS + Python AI. AutoStream is a production-grade reference implementation for n8n + Claude automation.
 
-Need custom AI agents or production automation built for your team? Visit the studio — **[Shery Labs](https://sherylabs.com)**. Also available for n8n + Claude API engagements on Upwork.
+Need custom AI agents or production automation built for your team? Visit the studio — **[SheryLabs](https://sherylabs.com)**. Also available for n8n + Claude API engagements on Upwork.
 
 ---
 
