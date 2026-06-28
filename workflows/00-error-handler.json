@@ -1,0 +1,78 @@
+{
+  "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  "name": "00 — Error Handler",
+  "nodes": [
+    {
+      "id": "node-error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "parameters": {}
+    },
+    {
+      "id": "node-error-supabase",
+      "name": "Supabase — Insert error_log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 300],
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/error_log",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "content-type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({ workflow_id: $json.workflow.id, workflow_run_id: $json.execution.id, kind: ($json.execution.lastNodeExecuted || \"\").toLowerCase().includes(\"anthropic\") ? \"anthropic_error\" : ($json.execution.lastNodeExecuted || \"\").toLowerCase().includes(\"supabase\") ? \"supabase_error\" : ($json.execution.lastNodeExecuted || \"\").toLowerCase().includes(\"validate\") ? \"validation_error\" : \"execution_error\", error_message: (($json.execution.error || {}).message || \"unknown error\"), attempt_count: 2, context: JSON.stringify({ execution_url: $json.execution.url, last_node: $json.execution.lastNodeExecuted, workflow_name: $json.workflow.name }) }) }}",
+        "specifyBody": "json"
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "notes": "kind is derived from the failing node name: contains 'anthropic'→anthropic_error, 'supabase'→supabase_error, 'validate'→validation_error, else execution_error."
+    },
+    {
+      "id": "node-error-slack",
+      "name": "Slack — Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300],
+      "parameters": {
+        "url": "={{$env.SLACK_WEBHOOK_URL}}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({ blocks: [{ type: \"header\", text: { type: \"plain_text\", text: \"🚨 AutoStream Error\" } }, { type: \"section\", fields: [{ type: \"mrkdwn\", text: \"*Workflow:* \" + ($('Error Trigger').first().json.workflow.name || $('Error Trigger').first().json.workflow.id) }, { type: \"mrkdwn\", text: \"*Execution ID:* \" + $('Error Trigger').first().json.execution.id }, { type: \"mrkdwn\", text: \"*Error:* \" + (($('Error Trigger').first().json.execution.error || {}).message || \"unknown\") }, { type: \"mrkdwn\", text: \"*Last node:* \" + ($('Error Trigger').first().json.execution.lastNodeExecuted || \"unknown\") }] }, { type: \"actions\", elements: [{ type: \"button\", text: { type: \"plain_text\", text: \"View Execution\" }, url: $('Error Trigger').first().json.execution.url || \"\" }] }] }) }}",
+        "specifyBody": "json"
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "notes": "References $('Error Trigger') directly because $json is empty after Supabase insert (Prefer: return=minimal). Posts Block Kit to #autostream-errors."
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [{ "node": "Supabase — Insert error_log", "type": "main", "index": 0 }]
+      ]
+    },
+    "Supabase — Insert error_log": {
+      "main": [
+        [{ "node": "Slack — Error Alert", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["autostream", "error-handler"]
+}
