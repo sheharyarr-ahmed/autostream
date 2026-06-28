@@ -367,7 +367,8 @@
   },
   "settings": {
     "executionOrder": "v1",
-    "timezone": "Asia/Karachi"
+    "timezone": "Asia/Karachi",
+    "errorWorkflow": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
   },
   "tags": [
     "autostream",
