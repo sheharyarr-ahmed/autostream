@@ -374,8 +374,5 @@
     "executionOrder": "v1",
     "errorWorkflow": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
   },
-  "tags": [
-    "autostream",
-    "email-classification"
-  ]
+  "tags": []
 }

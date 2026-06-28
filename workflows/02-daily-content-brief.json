@@ -370,8 +370,5 @@
     "timezone": "Asia/Karachi",
     "errorWorkflow": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
   },
-  "tags": [
-    "autostream",
-    "daily-content-brief"
-  ]
+  "tags": []
 }
