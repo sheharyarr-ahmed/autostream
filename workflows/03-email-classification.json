@@ -1,6 +1,6 @@
 {
   "name": "03 — Email Classification",
-  "active": false,
+  "active": true,
   "nodes": [
     {
       "id": "node-imap",
@@ -21,7 +21,13 @@
         },
         "postProcessAction": "read"
       },
-      "notes": "5-min polling cadence (set in workflow settings). DO NOT auto-mark-seen — done after success path completes."
+      "notes": "5-min polling cadence (set in workflow settings). DO NOT auto-mark-seen — done after success path completes.",
+      "credentials": {
+        "imap": {
+          "id": "picFioLfY0CnoSnT",
+          "name": "IMAP account"
+        }
+      }
     },
     {
       "id": "node-clean",
