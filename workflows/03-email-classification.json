@@ -111,79 +111,103 @@
             {
               "conditions": {
                 "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
                   "version": 2
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{$json.parsed.category}}",
+                    "id": "cond-sales",
+                    "leftValue": "={{ $json.parsed.category }}",
                     "rightValue": "sales",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
                     }
                   }
-                ]
+                ],
+                "combinator": "and"
               },
+              "renameOutput": true,
               "outputKey": "sales"
             },
             {
               "conditions": {
                 "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
                   "version": 2
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{$json.parsed.category}}",
+                    "id": "cond-support",
+                    "leftValue": "={{ $json.parsed.category }}",
                     "rightValue": "support",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
                     }
                   }
-                ]
+                ],
+                "combinator": "and"
               },
+              "renameOutput": true,
               "outputKey": "support"
             },
             {
               "conditions": {
                 "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
                   "version": 2
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{$json.parsed.category}}",
+                    "id": "cond-recruiting",
+                    "leftValue": "={{ $json.parsed.category }}",
                     "rightValue": "recruiting",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
                     }
                   }
-                ]
+                ],
+                "combinator": "and"
               },
+              "renameOutput": true,
               "outputKey": "recruiting"
             },
             {
               "conditions": {
                 "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
                   "version": 2
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{$json.parsed.category}}",
+                    "id": "cond-billing",
+                    "leftValue": "={{ $json.parsed.category }}",
                     "rightValue": "billing",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
                     }
                   }
-                ]
+                ],
+                "combinator": "and"
               },
+              "renameOutput": true,
               "outputKey": "billing"
             }
           ]
         },
         "options": {
-          "fallbackOutput": "other"
+          "fallbackOutput": "extra"
         }
       }
     },
