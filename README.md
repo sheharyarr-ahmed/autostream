@@ -2,10 +2,8 @@
 
 A portfolio reference for what production n8n + Claude work looks like when shipped, not prototyped — three workflows, every LLM call logged, every webhook signed, every output validated.
 
-> Live on Railway (30-day demo). Source open.
-> Demo: [Loom — coming soon](LOOM_URL_PLACEHOLDER)
-
-![n8n canvas — lead qualification workflow](docs/img/01-lead-qualification-canvas.png)
+> Self-hosted on Docker (n8n Community Edition). All three workflows verified green end-to-end on a live local stack — real Anthropic calls, real Slack posts, real Supabase rows. Source open.
+> Status: shipped and demoable locally. Railway deploy is a documented Phase-2 step; demo video pending.
 
 ---
 
@@ -31,14 +29,15 @@ Built for the founder or marketing operator who needs production automation, not
 
 ## Demo
 
-| Workflow | Trigger | Latency | Cost per run |
-|---|---|---|---|
-| Lead Qualification | webhook | ~2s | ~$0.001 |
-| Daily Content Brief | cron 09:00 PKT | ~15s | ~$0.01 |
-| Email Classification | IMAP poll 5 min | ~3s | ~$0.001 |
+Measured on the local stack (single run each; latency is wall-clock end-to-end):
 
-![Slack alert — qualified lead](docs/img/slack-alert-lead.png)
-![Supabase row — llm_calls log](docs/img/supabase-llm-calls.png)
+| Workflow | Trigger | Latency | Cost per run | Model |
+|---|---|---|---|---|
+| Lead Qualification | webhook | ~5s | $0.0006 | Haiku 4.5 |
+| Daily Content Brief | cron 09:00 PKT | ~40s (3 feeds) | $0.20 | Opus 4.7 |
+| Email Classification | IMAP poll | ~6s | $0.0004 | Haiku 4.5 |
+
+Costs are the actual `cost_usd` values logged to `llm_calls` for one run each — exactly the kind of figure the observability layer exists to surface. The brief is ~300× the others: Opus 4.7 plus ~50 candidate articles of input. At daily cadence that's ~$6/month, which is precisely the signal the cost tables in `rules/05-cost-control.md` are designed to catch before it surprises you.
 
 ---
 
@@ -72,9 +71,9 @@ AutoStream solves all five for the three workflows most small teams actually nee
 
 ### 3. Email Classification
 
-**Trigger:** IMAP poll every 5 minutes.
-**Flow:** Fetch unseen → Claude Haiku 4.5 classifies into `{sales, support, recruiting, billing, other}` + extracts urgency → route to category channel in Slack → mark seen → log to `llm_calls`.
-**Return:** A shared inbox stops being a black hole. Critical emails surface in the right channel in under a minute.
+**Trigger:** IMAP poll (Gmail).
+**Flow:** Fetch unseen → Claude Haiku 4.5 classifies into `{sales, support, recruiting, billing, other}` + extracts urgency and confidence → Switch routes by category (one Slack webhook configured; per-category channels are a config change away) → mark seen → log to `llm_calls`.
+**Return:** A shared inbox stops being a black hole. Each email surfaces in Slack, tagged with its category, within a minute.
 
 ---
 
@@ -152,7 +151,7 @@ Every LLM call writes one row to `llm_calls`:
 create table llm_calls (
   id              uuid primary key default gen_random_uuid(),
   workflow_id     text not null,
-  workflow_run_id uuid not null,
+  workflow_run_id text not null,            -- n8n execution id (integer-as-text)
   model           text not null,
   prompt_tokens   int  not null,
   output_tokens   int  not null,
@@ -167,7 +166,7 @@ create index on llm_calls (workflow_id, created_at desc);
 create index on llm_calls (status) where status != 'ok';
 ```
 
-Two more tables — `workflow_runs` and `error_log` — capture per-run metadata and failures. Full DDL in [`supabase/migrations/0001_observability_tables.sql`](supabase/migrations/0001_observability_tables.sql).
+`workflow_run_id` is `text`, not `uuid` — n8n execution ids are sequential integers, so the run-id columns store the real execution id to link a row back to its n8n execution page. Two more tables — `workflow_runs` and `error_log` — capture per-run metadata and failures. Full DDL in [`supabase/migrations/0001_observability_tables.sql`](supabase/migrations/0001_observability_tables.sql); the run-id retype is in [`0002_exec_id_text.sql`](supabase/migrations/0002_exec_id_text.sql).
 
 ---
 
@@ -186,22 +185,27 @@ docker compose up -d
 
 Open `http://localhost:5678` → log in with `N8N_BASIC_AUTH_*` from `.env` → **Import from File** → select each JSON under `workflows/`.
 
-Apply the Supabase migration:
+Apply the Supabase migrations (in order), or paste them into the Supabase SQL editor:
 
 ```bash
 psql "$SUPABASE_URL" -f supabase/migrations/0001_observability_tables.sql
+psql "$SUPABASE_URL" -f supabase/migrations/0002_exec_id_text.sql
 ```
 
-Trigger a test lead:
+Note: the IMAP node (Workflow 3) needs an IMAP credential created in the n8n UI and attached before activation; the Postgres node (Workflow 1) needs a Postgres credential pointing at your Supabase pooler. Webhook (WF1) and HTTP nodes read secrets from `$env`.
+
+Trigger a test lead. The HMAC is computed over the **exact** request body, so sign and send the same string:
 
 ```bash
+BODY='{"email":"test@example.com","intent":"buy","budget":"50k","message":"ready to buy"}'
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$WEBHOOK_HMAC_SECRET" | awk '{print $NF}')
 curl -X POST http://localhost:5678/webhook/lead \
   -H "Content-Type: application/json" \
-  -H "X-Signature: $(echo -n '{"email":"test@example.com"}' | openssl dgst -sha256 -hmac "$WEBHOOK_HMAC_SECRET" -r | cut -d' ' -f1)" \
-  -d '{"email":"test@example.com","intent":"buy","budget":"50k"}'
+  -H "x-signature: $SIG" \
+  -d "$BODY"
 ```
 
-Slack alert fires within ~2 seconds. The row lands in `llm_calls`.
+A qualified lead (score ≥ 70) fires a Slack alert within a few seconds; every call lands in `llm_calls` regardless of score.
 
 ---
 
@@ -232,7 +236,8 @@ autostream/
 
 ## Limitations
 
-- **Demo window.** Railway free trial expires 30 days after deploy. After that, run locally or move to your own host.
+- **Local deployment.** Currently runs self-hosted via Docker; not deployed to a public host. Railway (free-trial Docker target) is documented in ADR 0001 as the Phase-2 deploy step.
+- **Single Slack webhook.** Workflow 3 routes by category internally but posts to one configured webhook; per-category channels require additional webhook URLs.
 - **Single-tenant.** No org/user model. One n8n instance per deployment.
 - **No queue mode.** All execution in-process. Scaling notes in `docs/SCALING.md`.
 - **English-only prompts.** Multilingual classification not tuned.
